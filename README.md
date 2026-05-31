@@ -84,36 +84,39 @@ flowchart TD
 ## 🚀 Adım Adım Kurulum Rehberi
 
 > [!WARNING]  
-> **DİKKAT:** Bu projenin kalbi olan AI modelleri (Örn: 705 MB'lık MASSIVE.csv ve 364 MB'lık GODMODE.pth) **Git LFS** ile depolanmaktadır. Kuruluma başlamadan önce mutlaka LFS indirmelisiniz!
+> **DİKKAT:** Projenin ana omurgasını oluşturan AI modelleri (Örn: 359 MB'lık `checkpoint_epoch_29.pt` ve devasa `.csv` veri setleri) **boyutları çok büyük olduğu için GitHub'a yüklenmemiştir**. Projeyi klonladıktan sonra bu dosyaları manuel olarak indirip ilgili klasörlere koymanız gerekmektedir.
 
-### 1. Dosyaları Hazırlama
-Terminali açın ve repoyu indirin:
+### 1. Projeyi İndirme (Clone)
+Terminali açın ve projeyi bilgisayarınıza çekin:
 ```bash
-# Git LFS kurun (Mac: brew install git-lfs / Windows: git lfs install)
 git clone https://github.com/aliturhan0/sentetik_veri_otomasyonu.git
 cd sentetik_veri_otomasyonu
-git lfs install
-git lfs pull
 ```
 
-### 2. Sanal Ortamları Kurma
-Görüntü ve Veri hatlarının bağımlılıkları çakışmasın diye çift ortam kullanıyoruz.
-
-**Görüntü Arayüzü İçin:**
+### 2. Sanal Ortam (Virtual Environment) Kurulumu
+Bilgisayarınızdaki diğer projelerle kütüphanelerin çakışmaması için boş bir ortam oluşturun:
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install PySide6 requests opencv-contrib-python
-pip install -r rcgan_qt_gui_app_v1/requirements_qt.txt
+# Mac/Linux için:
+python3 -m venv env
+source env/bin/activate
+
+# Windows için:
+python -m venv env
+env\Scripts\activate
 ```
 
-**Veri Arayüzü İçin:**
+### 3. Gerekli Kütüphanelerin (Dependencies) Yüklenmesi
+Projeyi çalıştırmak için gerekli olan tüm kütüphaneler ana dizindeki `requirements.txt` dosyasında mevcuttur. Kurulumu tek seferde yapın:
 ```bash
-cd akilli_veri_arttirimi
-python3 -m venv otonom_env
-source otonom_env/bin/activate
 pip install -r requirements.txt
 ```
+
+### 4. Gerekli Model Dosyalarını İndirme
+Platformun çalışması için gerekli model dosyalarını (Eğer sizinle paylaşıldıysa Google Drive / OneDrive üzerinden) indirip proje içinde şu dizinlere yerleştirmeniz gerekir:
+- `rcgan_qt_gui_app_v1/checkpoint_epoch_29.pt` *(Görüntü üretim modeli)*
+- `detector/EDSR_x4.pb` *(Yüksek çözünürlük modeli)*
+- `detector/yolov8n.pt` *(YOLO test modeli)*
+- `akilli_veri_arttirimi/waymo_seed_MASSIVE.csv` *(Veri artırımı yapacaksanız)*
 
 ---
 
@@ -122,18 +125,16 @@ pip install -r requirements.txt
 Uygulamayı kullanmak son derece basittir. Arayüzler her şeyi sizin için görselleştirir.
 
 ### Ana Başlatıcı (Main Launcher)
-Her şeyi tek bir menüden yönetmek için:
+Her şeyi tek bir menüden yönetmek için sanal ortamınız aktifken (`source env/bin/activate` yapılıyken) şu komutu çalıştırın:
 ```bash
-source .venv/bin/activate
 python main_launcher.py
 ```
-Karşınıza çıkacak menüden "Görüntü Robustness" veya "Veri Artırımı" seçeneklerine tıklayarak ilgili arayüzü başlatabilirsiniz.
+Karşınıza çıkacak menüden "Görüntü Robustness" veya "Veri Artırımı" seçeneklerine tıklayarak ilgili arayüzü başlatabilirsiniz. (Artık iki ayrı arayüz için çift sanal ortam kurmanıza gerek yok, tek ortam her şeye yetiyor).
 
 ### Veri Arayüzünü Web Sunucusu Olarak Açma
 Eğer sadece analiz sekmesini veya tablo üretimini görmek isterseniz, doğrudan sunucuyu ayağa kaldırabilirsiniz:
 ```bash
 cd akilli_veri_arttirimi
-source otonom_env/bin/activate
 python backend/server.py
 ```
 Tarayıcınızdan `http://127.0.0.1:8000` adresine giderek tamamen yenilenmiş **Analiz ve Karşılaştırma Sekmelerini** görebilirsiniz. 

@@ -335,8 +335,7 @@ class MainLauncher(QWidget):
                 f"Kullanılan Python:\n{python}\n\n"
                 f"Eksik modüller: {', '.join(missing)}\n\n"
                 "Kurmak için terminalde:\n"
-                "cd /Users/aliturhan/Desktop/sonproje\n"
-                "python3 -m pip install -r rcgan_qt_gui_app_v1/requirements_qt.txt"
+                "pip install -r requirements.txt"
             )
             self.log(message)
             QMessageBox.warning(self, "Ortam hazır değil", message)
