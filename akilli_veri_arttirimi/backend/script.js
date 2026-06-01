@@ -553,44 +553,108 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(()=>f1Chart.update());
     }
 
-    // === SIMULATION ===
-    const simC=$('simCanvas'),sctx=simC.getContext('2d');let simOn=false;
+    // === SIMULATION — Professional MATLAB-style Engine ===
+    const simC=$('simCanvas'),sctx=simC.getContext('2d');
     const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
     const median=arr=>{const a=arr.filter(Number.isFinite).slice().sort((x,y)=>x-y);return a.length?a[Math.floor(a.length/2)]:0};
-    function rsc(){const p=simC.parentElement;simC.width=p.clientWidth;simC.height=p.clientHeight}
-    window.addEventListener('resize',rsc);rsc();
 
-    $('sim-severity').addEventListener('input',e=>$('sim-severity-val').textContent=parseFloat(e.target.value).toFixed(2)+'x');
+    // Anomaly color map & descriptions
+    const ANOMALY_COLORS={spike:'#ef4444',drift:'#f59e0b',freeze:'#22d3ee',dropout:'#8b5cf6',noise:'#ec4899'};
+    const ANOMALY_NAMES={spike:'Spike',drift:'Drift',freeze:'Freeze',dropout:'Dropout',noise:'Noise'};
+    const ANOMALY_DESCRIPTIONS={
+        spike:{title:'Spike Anomalisi',text:'Kısa süreli ani yüksek sapma. Sensör arızası veya dış etken kaynaklı anlık veri sıçraması. Araç yörüngesinde beklenmedik zıplamalar gözlemlenir. Genellikle 1-3 zaman adımı sürer ve referans değerden ±%200\'e kadar sapma gösterebilir.'},
+        drift:{title:'Drift Anomalisi',text:'Zamanla kademeli artan sapma. Sensör kalibrasyonu bozulması veya çevresel etkenler nedeniyle verinin referans değerden sistematik olarak uzaklaşması. Başlangıçta fark edilmez, zamanla kritik seviyelere ulaşır.'},
+        freeze:{title:'Freeze Anomalisi',text:'Belirli bir süre aynı pozisyonda takılı kalma. Sensör donması veya veri hattı kesintisi durumunda gözlemlenir. Veri sabit bir değerde kalır, gerçek hareketi yansıtmaz. Araç hareket etmesine rağmen veri güncellenmez.'},
+        dropout:{title:'Dropout Anomalisi',text:'Bazı veri noktalarının kaybolması veya kopuk iletilmesi. Ağ kesintisi, paket kaybı veya sensör arızası durumlarında gözlemlenir. Veri akışında boşluklar oluşur ve yörünge tahminini zorlaştırır.'},
+        noise:{title:'Noise Anomalisi',text:'Küçük ama sürekli rastgele dalgalanmalar. Elektromanyetik girişim, düşük sinyal-gürültü oranı veya sensör hassasiyeti kaynaklı. Tek başına kritik değildir ama birikimli etki oluşturabilir.'}
+    };
 
-    $('btn-sim').addEventListener('click',async()=>{
-        if(simOn)return;
-        const t=$('sim-type').value;
-        const severity=parseFloat($('sim-severity').value)||1;
-        log('Simülasyon: '+t.toUpperCase()+' | şiddet '+severity.toFixed(2)+'x');
-        try{
-            const r=await fetch(API+'/api/simulation_sample',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:t})});
-            if(!r.ok)throw new Error('Önce RCGAN sentetik veri üretin');
-            runSim(await r.json(),severity);
-        }catch(e){log(e.message,'err')}
+    let simState={running:false,paused:false,frame:0,data:null,ref:null,sim:null,frames:[],animId:null,timeChart:null,playbackSpeed:1.0,selectedType:'spike'};
+
+    // Canvas resize
+    function simResize(){const wrap=simC.parentElement;if(!wrap)return;simC.width=wrap.clientWidth;simC.height=wrap.clientHeight}
+    window.addEventListener('resize',simResize);
+    // Defer initial resize until panel is visible
+    const simResizeObserver=new MutationObserver(()=>{if($('panel-simulation').classList.contains('active')){simResize();initTimeChart()}});
+    simResizeObserver.observe($('panel-simulation'),{attributes:true,attributeFilter:['class']});
+
+    // --- Anomaly button selector ---
+    document.querySelectorAll('.sim-anomaly-btn').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+            document.querySelectorAll('.sim-anomaly-btn').forEach(b=>b.classList.remove('active'));
+            btn.classList.add('active');
+            simState.selectedType=btn.dataset.type;
+            updateAnomalyDescription(btn.dataset.type);
+            updateLegend(btn.dataset.type);
+        });
     });
 
+    function updateAnomalyDescription(type){
+        const desc=ANOMALY_DESCRIPTIONS[type];
+        $('sim-desc-title').textContent=desc.title;
+        $('sim-desc-text').textContent=desc.text;
+    }
+
+    function updateLegend(type){
+        const color=ANOMALY_COLORS[type];
+        $('sim-legend-anomaly-dot').style.background=color;
+        $('sim-legend-anomaly-label').textContent='Anomali ('+ANOMALY_NAMES[type]+')';
+    }
+
+    // --- Sliders ---
+    $('sim-severity').addEventListener('input',e=>$('sim-severity-val').textContent=parseFloat(e.target.value).toFixed(2)+'x');
+    $('sim-playback-speed').addEventListener('input',e=>{
+        const v=parseFloat(e.target.value);
+        $('sim-speed-val').textContent=v.toFixed(v%1===0?0:1)+'x';
+        simState.playbackSpeed=v;
+    });
+
+    // --- Time Chart (Chart.js) ---
+    function initTimeChart(){
+        if(simState.timeChart)return;
+        const ctx=$('simTimeChart');
+        if(!ctx)return;
+        if(!window.Chart)return;
+        simState.timeChart=new Chart(ctx.getContext('2d'),{
+            type:'line',
+            data:{
+                labels:[],
+                datasets:[
+                    {label:'Referans (Normal)',data:[],borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.08)',borderWidth:2,pointRadius:0,tension:.3,fill:true},
+                    {label:'Anomali',data:[],borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',borderWidth:2,pointRadius:0,tension:.3,fill:true}
+                ]
+            },
+            options:{
+                responsive:true,maintainAspectRatio:false,animation:{duration:0},
+                scales:{
+                    x:{display:true,grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#64748b',maxTicksLimit:10,font:{size:10}}},
+                    y:{display:true,grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#64748b',font:{size:10}},title:{display:true,text:'Y Pozisyon (m)',color:'#64748b',font:{size:11}}}
+                },
+                plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}}
+            }
+        });
+    }
+
+    function updateTimeChart(refData,simData,currentFrame){
+        if(!simState.timeChart)return;
+        const tc=simState.timeChart;
+        const labels=refData.map((_,i)=>(i*0.1).toFixed(1)+'s');
+        tc.data.labels=labels;
+        tc.data.datasets[0].data=refData.map(v=>v.toFixed(3));
+        tc.data.datasets[1].data=simData.map((v,i)=>i<=currentFrame?v.toFixed(3):null);
+        tc.data.datasets[1].borderColor=ANOMALY_COLORS[simState.selectedType]||'#ef4444';
+        tc.data.datasets[1].backgroundColor=(ANOMALY_COLORS[simState.selectedType]||'#ef4444')+'14';
+        tc.update();
+    }
+
+    // --- Reference trajectory ---
     function makeReference(data){
         const n=data.x.length;
         const dx=[],dy=[],ds=[];
-        for(let i=1;i<n;i++){
-            dx.push(data.x[i]-data.x[i-1]);
-            dy.push(data.y[i]-data.y[i-1]);
-            ds.push(data.speed[i]);
-        }
+        for(let i=1;i<n;i++){dx.push(data.x[i]-data.x[i-1]);dy.push(data.y[i]-data.y[i-1]);ds.push(data.speed[i])}
         const mx=median(dx),my=median(dy),ms=Math.max(.1,median(ds));
         const ref={x:[],y:[],speed:[],vx:[],vy:[]};
-        for(let i=0;i<n;i++){
-            ref.x.push(data.x[0]+mx*i);
-            ref.y.push(data.y[0]+my*i);
-            ref.speed.push(ms);
-            ref.vx.push(mx/.1);
-            ref.vy.push(my/.1);
-        }
+        for(let i=0;i<n;i++){ref.x.push(data.x[0]+mx*i);ref.y.push(data.y[0]+my*i);ref.speed.push(ms);ref.vx.push(mx/.1);ref.vy.push(my/.1)}
         return ref;
     }
 
@@ -611,39 +675,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const accel=i>0?(sim.speed[i]-sim.speed[i-1])/.1:0;
         const offset=Math.hypot(sim.x[i]-ref.x[i],sim.y[i]-ref.y[i]);
         const jerk=i>1?Math.abs(((sim.speed[i]-sim.speed[i-1])-(sim.speed[i-1]-sim.speed[i-2]))/.01):0;
-        const consistencyPenalty=(sp<0?30:0)+(Math.abs(accel)>16?25:0)+(jerk>180?15:0)+(offset>7?20:0);
         const risk=clamp(offset*9+Math.abs(accel)*3+(sp<.4?18:0)+(jerk>120?10:0),0,100);
-        return {sp,accel,offset,jerk,risk,phys:clamp(100-consistencyPenalty,0,100),ano:risk>45||offset>3.5||Math.abs(accel)>10||sp<.4};
+        return{sp,accel,offset,jerk,risk,ano:risk>45||offset>3.5||Math.abs(accel)>10||sp<.4};
     }
 
+    // --- Vehicle canvas drawing ---
     function drawRoad(ro,mid){
         const w=simC.width,h=simC.height;
+        // Background gradient
         const grd=sctx.createLinearGradient(0,0,0,h);
         grd.addColorStop(0,'#0b1220');grd.addColorStop(.5,'#080c14');grd.addColorStop(1,'#050812');
         sctx.fillStyle=grd;sctx.fillRect(0,0,w,h);
-        sctx.fillStyle='rgba(255,255,255,.025)';
-        sctx.fillRect(0,mid-132,w,264);
+        // Grid lines (MATLAB style)
+        sctx.strokeStyle='rgba(100,116,139,.06)';sctx.lineWidth=1;
+        for(let gx=0;gx<w;gx+=40){sctx.beginPath();sctx.moveTo(gx,0);sctx.lineTo(gx,h);sctx.stroke()}
+        for(let gy=0;gy<h;gy+=40){sctx.beginPath();sctx.moveTo(0,gy);sctx.lineTo(w,gy);sctx.stroke()}
+        // Road surface
+        sctx.fillStyle='rgba(255,255,255,.02)';sctx.fillRect(0,mid-132,w,264);
         sctx.strokeStyle='rgba(148,163,184,.16)';sctx.lineWidth=2;
         [mid-132,mid+132].forEach(y=>{sctx.beginPath();sctx.moveTo(0,y);sctx.lineTo(w,y);sctx.stroke()});
+        // Dashed lane markers
         sctx.setLineDash([18,26]);sctx.lineWidth=1;sctx.strokeStyle='rgba(226,232,240,.18)';
         [mid-44,mid+44].forEach(y=>{sctx.beginPath();sctx.lineDashOffset=ro;sctx.moveTo(0,y);sctx.lineTo(w,y);sctx.stroke()});
         sctx.setLineDash([]);
+        // Axis labels
+        sctx.fillStyle='rgba(100,116,139,.4)';sctx.font='10px JetBrains Mono,monospace';
+        sctx.fillText('X →',w-30,h-8);sctx.fillText('Y ↑',6,14);
     }
 
     function drawPath(points,color,lineWidth=2,dashed=false){
         if(points.length<2)return;
-        sctx.save();
-        sctx.strokeStyle=color;sctx.lineWidth=lineWidth;
+        sctx.save();sctx.strokeStyle=color;sctx.lineWidth=lineWidth;
         if(dashed)sctx.setLineDash([9,9]);
-        sctx.beginPath();
-        points.forEach((p,i)=>i?sctx.lineTo(p.x,p.y):sctx.moveTo(p.x,p.y));
-        sctx.stroke();
-        sctx.restore();
+        sctx.beginPath();points.forEach((p,i)=>i?sctx.lineTo(p.x,p.y):sctx.moveTo(p.x,p.y));
+        sctx.stroke();sctx.restore();
     }
 
     function drawCar(x,y,angle,color,ghost=false){
         sctx.save();sctx.translate(x,y);sctx.rotate(angle);
-        sctx.globalAlpha=ghost ? .45 : 1;
+        sctx.globalAlpha=ghost?.45:1;
         sctx.shadowBlur=ghost?0:22;sctx.shadowColor=color;
         sctx.fillStyle=color;sctx.beginPath();sctx.roundRect(-24,-12,48,24,6);sctx.fill();
         sctx.fillStyle=ghost?'#101827':'#060914';sctx.fillRect(5,-9,11,18);
@@ -651,47 +721,223 @@ document.addEventListener('DOMContentLoaded', () => {
         sctx.restore();sctx.globalAlpha=1;sctx.shadowBlur=0;
     }
 
-    function runSim(data,severity){
-        simOn=true;$('btn-sim').disabled=true;let f=0,ro=0;
-        const ref=makeReference(data),sim=applySeverity(data,ref,severity),tot=sim.x.length;
-        const tc={spike:'#ef4444',drift:'#f59e0b',freeze:'#22d3ee',dropout:'#8b5cf6',noise:'#ec4899'};
-        const ac=tc[data.type]||'#ef4444';
-        const trail=[],refTrail=[],frames=[];
-        (function draw(){
-            if(f>=tot){
-                simOn=false;$('btn-sim').disabled=false;$('s-status').textContent='BİTTİ';$('s-status').style.color='var(--green)';
-                const maxOffset=Math.max(...frames.map(m=>m.offset),0),maxAccel=Math.max(...frames.map(m=>Math.abs(m.accel)),0);
-                const avgSpeed=frames.reduce((a,m)=>a+m.sp,0)/(frames.length||1),anoTime=frames.filter(m=>m.ano).length*.1;
-                const avgPhys=frames.reduce((a,m)=>a+m.phys,0)/(frames.length||1),avgRisk=frames.reduce((a,m)=>a+m.risk,0)/(frames.length||1);
-                $('r-max-offset').textContent=maxOffset.toFixed(2)+' m';
-                $('r-max-accel').textContent=maxAccel.toFixed(2)+' m/s²';
-                $('r-avg-speed').textContent=avgSpeed.toFixed(2)+' m/s';
-                $('r-ano-time').textContent=anoTime.toFixed(2)+' sn';
-                $('r-quality').textContent=Math.round(clamp(avgPhys-avgRisk*.25,0,100))+'/100';
-                log('Sim raporu: risk '+Math.round(avgRisk)+'/100, fizik '+Math.round(avgPhys)+'%, max sapma '+maxOffset.toFixed(2)+' m','ok');
-                return;
-            }
-            const m=calcFrame(sim,ref,f),mid=simC.height/2,w=simC.width;
-            ro-=Math.max(2,m.sp*.42);drawRoad(ro,mid);
-            if(m.ano){sctx.fillStyle=ac+'13';sctx.fillRect(0,0,simC.width,simC.height)}
-            const sx=w*.18,scale=24,step=24;
-            const refPt={x:sx+f*step,y:mid+(ref.y[f]-ref.y[0])*scale};
-            const simPt={x:sx+f*step,y:mid+(sim.y[f]-ref.y[0])*scale};
-            refTrail.push(refPt);trail.push(simPt);if(trail.length>18){trail.shift();refTrail.shift()}
-            drawPath(refTrail,'rgba(16,185,129,.45)',2,true);
-            drawPath(trail,ac+'cc',3,false);
-            for(let i=0;i<trail.length;i+=3){sctx.fillStyle=ac+Math.round(35+i*9).toString(16);sctx.beginPath();sctx.arc(trail[i].x,trail[i].y,3,0,Math.PI*2);sctx.fill()}
-            const ag=Math.atan2(sim.vy[f],sim.vx[f]+1e-8),rag=Math.atan2(ref.vy[f],ref.vx[f]+1e-8);
-            drawCar(refPt.x,refPt.y,rag,'#10b981',true);
-            drawCar(simPt.x,simPt.y,ag,ac,false);
-            sctx.strokeStyle='rgba(255,255,255,.18)';sctx.lineWidth=1;sctx.setLineDash([4,5]);
-            sctx.beginPath();sctx.moveTo(refPt.x,refPt.y);sctx.lineTo(simPt.x,simPt.y);sctx.stroke();sctx.setLineDash([]);
-            $('s-status').textContent=m.ano?'ANOMALİ':'STABİL';$('s-status').style.color=m.ano?ac:'var(--green)';
-            $('s-speed').textContent=m.sp.toFixed(1);$('s-accel').textContent=m.accel.toFixed(1);$('s-offset').textContent=m.offset.toFixed(2);
-            $('s-risk').textContent=Math.round(m.risk);$('s-risk').style.color=m.risk>70?'var(--red)':m.risk>40?'var(--amber)':'var(--green)';
-            $('s-phys').textContent=Math.round(m.phys);$('s-phys').style.color=m.phys<70?'var(--red)':m.phys<88?'var(--amber)':'var(--green)';
-            frames.push(m);f++;setTimeout(()=>requestAnimationFrame(draw),70);
-        })();
+    // --- Controls ---
+    $('btn-sim-play').addEventListener('click',async()=>{
+        if(simState.running&&simState.paused){
+            simState.paused=false;
+            $('btn-sim-pause').disabled=false;
+            $('btn-sim-play').innerHTML='<i class="fa-solid fa-play"></i> Çalışıyor';
+            $('btn-sim-play').disabled=true;
+            runFrame();
+            return;
+        }
+        if(simState.running)return;
+        const t=simState.selectedType;
+        const severity=parseFloat($('sim-severity').value)||1;
+        log('Simülasyon: '+t.toUpperCase()+' | şiddet '+severity.toFixed(2)+'x');
+        try{
+            const r=await fetch(API+'/api/simulation_sample',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:t})});
+            if(!r.ok)throw new Error('Simülasyon verisi alınamadı');
+            const data=await r.json();
+            if(data.source==='demo')log('Demo veri kullanılıyor (önce RCGAN veri üretin)');
+            startSimulation(data,severity);
+        }catch(e){log(e.message,'err')}
+    });
+
+    $('btn-sim-pause').addEventListener('click',()=>{
+        if(!simState.running)return;
+        simState.paused=!simState.paused;
+        $('btn-sim-pause').innerHTML=simState.paused?'<i class="fa-solid fa-play"></i>':'<i class="fa-solid fa-pause"></i>';
+        $('btn-sim-play').disabled=!simState.paused;
+        $('btn-sim-play').innerHTML=simState.paused?'<i class="fa-solid fa-play"></i> Devam':'<i class="fa-solid fa-play"></i> Çalışıyor';
+        $('s-status').textContent=simState.paused?'DURDURULDU':'ÇALIŞIYOR';
+        $('s-status').style.color=simState.paused?'var(--amber)':'var(--green)';
+        if(!simState.paused)runFrame();
+    });
+
+    $('btn-sim-reset').addEventListener('click',()=>{
+        if(simState.animId)cancelAnimationFrame(simState.animId);
+        simState.running=false;simState.paused=false;simState.frame=0;simState.frames=[];
+        $('btn-sim-play').disabled=false;$('btn-sim-play').innerHTML='<i class="fa-solid fa-play"></i> Başlat';
+        $('btn-sim-pause').disabled=true;$('btn-sim-reset').disabled=true;
+        $('btn-sim-pause').innerHTML='<i class="fa-solid fa-pause"></i>';
+        $('s-status').textContent='Bekliyor';$('s-status').style.color='var(--text2)';
+        $('s-speed').textContent='0.0';$('s-offset').textContent='0.0';$('s-risk').textContent='0';
+        $('sim-timeline-slider').value=0;$('sim-timeline-slider').disabled=true;
+        $('sim-time-display').textContent='0.0s / 0.0s';
+        // Clear KPIs
+        ['sk-type','sk-severity','sk-affected','sk-avg-offset','sk-max-offset','sk-loss','sk-duration','sk-risk'].forEach(id=>$(id).textContent='—');
+        // Clear chart
+        if(simState.timeChart){simState.timeChart.data.labels=[];simState.timeChart.data.datasets[0].data=[];simState.timeChart.data.datasets[1].data=[];simState.timeChart.update()}
+        // Clear canvas
+        if(simC.width>0&&simC.height>0){sctx.clearRect(0,0,simC.width,simC.height);drawRoad(0,simC.height/2)}
+        log('Simülasyon sıfırlandı.');
+    });
+
+    // --- Timeline scrubber ---
+    $('sim-timeline-slider').addEventListener('input',e=>{
+        if(!simState.sim||!simState.ref)return;
+        const f=parseInt(e.target.value);
+        simState.frame=f;
+        renderFrameAt(f);
+    });
+
+    // --- Main simulation lifecycle ---
+    function startSimulation(data,severity){
+        simResize();initTimeChart();
+        simState.running=true;simState.paused=false;simState.frame=0;simState.frames=[];
+        simState.data=data;
+        simState.ref=makeReference(data);
+        simState.sim=applySeverity(data,simState.ref,severity);
+        const tot=simState.sim.x.length;
+
+        // Setup UI
+        $('btn-sim-play').disabled=true;$('btn-sim-play').innerHTML='<i class="fa-solid fa-play"></i> Çalışıyor';
+        $('btn-sim-pause').disabled=false;$('btn-sim-reset').disabled=false;
+        $('sim-timeline-slider').max=tot-1;$('sim-timeline-slider').value=0;
+        $('sim-timeline-end').textContent=((tot-1)*0.1).toFixed(1)+'s';
+
+        // Setup time chart color
+        const ac=ANOMALY_COLORS[data.type]||'#ef4444';
+        if(simState.timeChart){
+            simState.timeChart.data.datasets[1].borderColor=ac;
+            simState.timeChart.data.datasets[1].backgroundColor=ac+'14';
+        }
+
+        // Pre-compute all frames for scrubbing
+        for(let i=0;i<tot;i++){simState.frames.push(calcFrame(simState.sim,simState.ref,i))}
+
+        // Initialize full chart data
+        const refY=simState.ref.y.slice();
+        const simY=simState.sim.y.slice();
+        if(simState.timeChart){
+            const labels=refY.map((_,i)=>(i*0.1).toFixed(1)+'s');
+            simState.timeChart.data.labels=labels;
+            simState.timeChart.data.datasets[0].data=refY.map(v=>parseFloat(v.toFixed(3)));
+            simState.timeChart.data.datasets[1].data=simY.map(()=>null);
+            simState.timeChart.update();
+        }
+
+        runFrame();
+    }
+
+    function runFrame(){
+        if(!simState.running||simState.paused)return;
+        const tot=simState.sim.x.length;
+        if(simState.frame>=tot){
+            finishSimulation();
+            return;
+        }
+
+        renderFrameAt(simState.frame);
+
+        // Reveal chart point
+        if(simState.timeChart){
+            simState.timeChart.data.datasets[1].data[simState.frame]=parseFloat(simState.sim.y[simState.frame].toFixed(3));
+            simState.timeChart.update();
+        }
+
+        simState.frame++;
+        const delay=Math.max(10,Math.round(70/simState.playbackSpeed));
+        simState.animId=setTimeout(()=>requestAnimationFrame(runFrame),delay);
+    }
+
+    function renderFrameAt(f){
+        const sim=simState.sim,ref=simState.ref,m=simState.frames[f];
+        if(!sim||!ref||!m)return;
+        const tot=sim.x.length,mid=simC.height/2,w=simC.width;
+        const ac=ANOMALY_COLORS[sim.type]||'#ef4444';
+        const ro=-Math.max(2,m.sp*.42)*f;
+
+        drawRoad(ro,mid);
+
+        // Anomaly flash
+        if(m.ano){sctx.fillStyle=ac+'10';sctx.fillRect(0,0,w,simC.height)}
+
+        // Compute visible trail
+        const scale=24,step=Math.max(6,Math.min(24,w/(tot+10)));
+        const sx=w*.12;
+        const trailLen=Math.min(f+1,25);
+        const refTrail=[],trail=[];
+        for(let i=Math.max(0,f-trailLen+1);i<=f;i++){
+            refTrail.push({x:sx+i*step,y:mid+(ref.y[i]-ref.y[0])*scale});
+            trail.push({x:sx+i*step,y:mid+(sim.y[i]-ref.y[0])*scale});
+        }
+
+        // Draw trails
+        drawPath(refTrail,'rgba(16,185,129,.45)',2,true);
+        drawPath(trail,ac+'cc',3,false);
+
+        // Trail dots
+        for(let i=0;i<trail.length;i+=3){
+            sctx.fillStyle=ac+Math.round(35+i*9).toString(16).padStart(2,'0');
+            sctx.beginPath();sctx.arc(trail[i].x,trail[i].y,3,0,Math.PI*2);sctx.fill();
+        }
+
+        // Cars
+        const refPt=refTrail[refTrail.length-1],simPt=trail[trail.length-1];
+        const ag=Math.atan2(sim.vy[f],sim.vx[f]+1e-8),rag=Math.atan2(ref.vy[f],ref.vx[f]+1e-8);
+        drawCar(refPt.x,refPt.y,rag,'#10b981',true);
+        drawCar(simPt.x,simPt.y,ag,ac,false);
+
+        // Deviation line
+        sctx.strokeStyle='rgba(255,255,255,.18)';sctx.lineWidth=1;sctx.setLineDash([4,5]);
+        sctx.beginPath();sctx.moveTo(refPt.x,refPt.y);sctx.lineTo(simPt.x,simPt.y);sctx.stroke();sctx.setLineDash([]);
+
+        // Frame counter
+        sctx.fillStyle='rgba(100,116,139,.5)';sctx.font='10px JetBrains Mono,monospace';
+        sctx.fillText('Frame '+f+'/'+tot+' | '+(f*0.1).toFixed(1)+'s',8,simC.height-8);
+
+        // Update HUD
+        $('s-status').textContent=m.ano?'ANOMALİ':'STABİL';
+        $('s-status').style.color=m.ano?ac:'var(--green)';
+        $('s-speed').textContent=m.sp.toFixed(1);
+        $('s-offset').textContent=m.offset.toFixed(2);
+        $('s-risk').textContent=Math.round(m.risk);
+        $('s-risk').style.color=m.risk>70?'var(--red)':m.risk>40?'var(--amber)':'var(--green)';
+
+        // Timeline slider
+        $('sim-timeline-slider').value=f;
+        $('sim-time-display').textContent=(f*0.1).toFixed(1)+'s / '+((tot-1)*0.1).toFixed(1)+'s';
+    }
+
+    function finishSimulation(){
+        simState.running=false;
+        $('btn-sim-play').disabled=false;$('btn-sim-play').innerHTML='<i class="fa-solid fa-play"></i> Başlat';
+        $('btn-sim-pause').disabled=true;
+        $('sim-timeline-slider').disabled=false;
+        $('s-status').textContent='BİTTİ';$('s-status').style.color='var(--green)';
+
+        // Reveal all chart data
+        if(simState.timeChart&&simState.sim){
+            simState.timeChart.data.datasets[1].data=simState.sim.y.map(v=>parseFloat(v.toFixed(3)));
+            simState.timeChart.update();
+        }
+
+        // Compute KPIs
+        const frames=simState.frames,tot=frames.length;
+        const offsets=frames.map(m=>m.offset);
+        const maxOffset=Math.max(...offsets,0);
+        const avgOffset=offsets.reduce((a,b)=>a+b,0)/tot;
+        const affected=frames.filter(m=>m.ano).length;
+        const anoTime=affected*0.1;
+        const avgRisk=frames.reduce((a,m)=>a+m.risk,0)/tot;
+        const lossRate=simState.sim.type==='dropout'?(affected/tot*100).toFixed(1)+'%':'0.0%';
+        const severity=parseFloat($('sim-severity').value);
+        const riskLevel=avgRisk>60?'KRİTİK':avgRisk>35?'ORTA':'DÜŞÜK';
+
+        // Update KPI cards
+        $('sk-type').textContent=ANOMALY_NAMES[simState.sim.type]||'—';
+        $('sk-severity').textContent=severity.toFixed(2)+'x';
+        $('sk-affected').textContent=affected+' / '+tot;
+        $('sk-avg-offset').textContent=avgOffset.toFixed(2)+' m';
+        $('sk-max-offset').textContent=maxOffset.toFixed(2)+' m';
+        $('sk-loss').textContent=lossRate;
+        $('sk-duration').textContent=(tot*0.1).toFixed(1)+' sn';
+        $('sk-risk').textContent=riskLevel;
+        $('sk-risk').style.color=avgRisk>60?'var(--red)':avgRisk>35?'var(--amber)':'var(--green)';
+
+        log('Sim tamamlandı: '+ANOMALY_NAMES[simState.sim.type]+' | risk='+Math.round(avgRisk)+'/100, maks sapma='+maxOffset.toFixed(2)+' m, etkilenen='+affected+'/'+tot,'ok');
     }
 
     // === AUTOMATION ===
