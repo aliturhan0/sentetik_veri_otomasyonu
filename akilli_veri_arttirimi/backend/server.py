@@ -2713,7 +2713,16 @@ async def latest_analysis():
 @app.post("/api/simulation_sample")
 def simulation_sample(data: dict):
     anomaly_type = data.get("type", "spike")
-    n_steps = 80  # daha uzun simülasyon
+    target_steps = 80  # 8 saniyelik simülasyon
+
+    def _interp_to_target(arr, target_n):
+        """Kısa veriyi (ör. 20 adım) hedef uzunluğa (80 adım) interpolasyonla uzat."""
+        n = len(arr)
+        if n >= target_n:
+            return arr[:target_n]
+        old_t = np.linspace(0, 1, n)
+        new_t = np.linspace(0, 1, target_n)
+        return np.interp(new_t, old_t, arr).tolist()
 
     # --- Gerçek RCGAN verisinden çekmeyi dene ---
     path = os.path.join(OUTPUT_DIR, "live_synthetic_output.csv")
@@ -2725,13 +2734,20 @@ def simulation_sample(data: dict):
                 if len(sub) > 0:
                     r = sub.sample(1).iloc[0]
                     cols_available = max(i for i in range(1, 81) if f'x({i})' in df.columns)
+                    raw_x = [float(r[f'x({i+1})']) for i in range(cols_available)]
+                    raw_y = [float(r[f'y({i+1})']) for i in range(cols_available)]
+                    raw_speed = [float(r[f'speed({i+1})']) for i in range(cols_available)]
+                    raw_vx = [float(r[f'vx({i+1})']) for i in range(cols_available)]
+                    raw_vy = [float(r[f'vy({i+1})']) for i in range(cols_available)]
+
+                    # Eğer veri kısaysa (ör. 20 adım), interpolasyonla 80 adıma uzat
                     return {
                         "source": "rcgan", "type": anomaly_type,
-                        "x": [float(r[f'x({i+1})']) for i in range(min(cols_available, n_steps))],
-                        "y": [float(r[f'y({i+1})']) for i in range(min(cols_available, n_steps))],
-                        "speed": [float(r[f'speed({i+1})']) for i in range(min(cols_available, n_steps))],
-                        "vx": [float(r[f'vx({i+1})']) for i in range(min(cols_available, n_steps))],
-                        "vy": [float(r[f'vy({i+1})']) for i in range(min(cols_available, n_steps))],
+                        "x": _interp_to_target(raw_x, target_steps),
+                        "y": _interp_to_target(raw_y, target_steps),
+                        "speed": _interp_to_target(raw_speed, target_steps),
+                        "vx": _interp_to_target(raw_vx, target_steps),
+                        "vy": _interp_to_target(raw_vy, target_steps),
                     }
         except Exception:
             pass
@@ -2747,33 +2763,33 @@ def simulation_sample(data: dict):
 
     x, y, speed, vx, vy = [0.0], [0.0], [base_speed], [base_speed], [base_heading]
 
-    for i in range(1, n_steps):
+    for i in range(1, target_steps):
         t = i * dt
         s = base_speed + rng.normal(0, 0.15)
         dx = s * dt
         dy = base_heading * dt + rng.normal(0, 0.02)
 
         if anomaly_type == "spike":
-            if i in [22, 23, 48, 49]:
-                dy += rng.choice([-1, 1]) * (3.5 + rng.uniform(0, 1.5))
-                s += rng.choice([-1, 1]) * (8.0 + rng.uniform(0, 3))
+            if i in [18, 19, 20, 42, 43, 44, 65, 66]:
+                dy += rng.choice([-1, 1]) * (4.0 + rng.uniform(0, 2.5))
+                s += rng.choice([-1, 1]) * (10.0 + rng.uniform(0, 5))
         elif anomaly_type == "drift":
-            drift_factor = (t / (n_steps * dt)) ** 1.8
-            dy += drift_factor * 2.8
-            s += drift_factor * 3.0
+            drift_factor = (t / (target_steps * dt)) ** 1.6
+            dy += drift_factor * 3.5
+            s += drift_factor * 4.0
         elif anomaly_type == "freeze":
-            if 25 <= i <= 40:
+            if 22 <= i <= 45:
                 dx = 0.0
                 dy = 0.0
                 s = speed[-1]
         elif anomaly_type == "dropout":
-            if rng.random() < 0.18:
-                dx = rng.normal(0, 2.5)
-                dy = rng.normal(0, 1.8)
-                s = max(0.1, s + rng.normal(0, 5))
+            if rng.random() < 0.22:
+                dx = rng.normal(0, 3.0)
+                dy = rng.normal(0, 2.5)
+                s = max(0.1, s + rng.normal(0, 7))
         elif anomaly_type == "noise":
-            dy += rng.normal(0, 0.55)
-            s += rng.normal(0, 1.2)
+            dy += rng.normal(0, 0.7)
+            s += rng.normal(0, 1.8)
 
         s = max(0.0, s)
         x.append(x[-1] + dx)
