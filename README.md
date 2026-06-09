@@ -461,4 +461,4 @@ Bazı eski kütüphaneler Windows yolunda Türkçe karakter olduğunda dosya oku
 - Çok uzun veya özel karakterli ek klasör yollarından kaçının.
 
 ---
-**Geliştirici:** Ali Turhan & Ekibi | Modern AI Araştırma Laboratuvarı Mimarisi
+**Geliştiriciler:** Ali Turhan & Özcan Yıldıral | Modern AI Araştırma Laboratuvarı Mimarisi
