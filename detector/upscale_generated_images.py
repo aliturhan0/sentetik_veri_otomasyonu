@@ -54,13 +54,55 @@ def reset_dir(path):
     os.makedirs(path, exist_ok=True)
 
 
+def opencv_safe_model_path(model_path):
+    model_path = os.fspath(model_path)
+
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"EDSR model dosyasi bulunamadi: {model_path}")
+
+    if not os.path.isabs(model_path):
+        return model_path
+
+    try:
+        relative_path = os.path.relpath(model_path, os.getcwd())
+    except ValueError:
+        relative_path = None
+
+    if relative_path and not relative_path.startswith("..") and not os.path.isabs(relative_path):
+        return relative_path
+
+    cache_root = os.path.join(os.path.splitdrive(model_path)[0] + os.sep, "sentetik_model_cache")
+    os.makedirs(cache_root, exist_ok=True)
+
+    cached_model_path = os.path.join(cache_root, os.path.basename(model_path))
+
+    if (
+        not os.path.exists(cached_model_path)
+        or os.path.getsize(cached_model_path) != os.path.getsize(model_path)
+        or os.path.getmtime(cached_model_path) < os.path.getmtime(model_path)
+    ):
+        shutil.copy2(model_path, cached_model_path)
+
+    return cached_model_path
+
+
 def load_super_resolution_model(model_path=MODEL_PATH, log_callback=None):
     import cv2
 
     log_message("\nLoading Super Resolution model...\n", log_callback)
 
     sr = cv2.dnn_superres.DnnSuperResImpl_create()
-    sr.readModel(model_path)
+    safe_model_path = opencv_safe_model_path(model_path)
+
+    try:
+        sr.readModel(safe_model_path)
+    except cv2.error as exc:
+        raise RuntimeError(
+            "EDSR modeli OpenCV tarafindan okunamadi. "
+            f"Beklenen dosya: {model_path}. "
+            "Dosya mevcutsa Windows yolundaki Turkce karakterler veya bozuk model dosyasi buna sebep olabilir."
+        ) from exc
+
     sr.setModel("edsr", 4)
 
     log_message("Super Resolution model loaded.\n", log_callback)
@@ -76,6 +118,7 @@ def upscale_image_file(
     skip_existing=True,
 ):
     import cv2
+    import numpy as np
 
     if skip_existing and os.path.exists(output_path):
         try:
@@ -84,7 +127,8 @@ def upscale_image_file(
         except OSError:
             pass
 
-    image = cv2.imread(input_path)
+    image_data = np.fromfile(input_path, dtype=np.uint8)
+    image = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
 
     if image is None:
         return False, "unreadable"
@@ -97,7 +141,21 @@ def upscale_image_file(
         interpolation=cv2.INTER_CUBIC,
     )
 
-    cv2.imwrite(output_path, final)
+    ext = os.path.splitext(output_path)[1] or ".png"
+    ok, encoded = cv2.imencode(ext, final)
+
+    if not ok:
+        return False, "encode_failed"
+
+    output_dir = os.path.dirname(os.fspath(output_path))
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
+    encoded.tofile(output_path)
+
+    if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+        return False, "write_failed"
+
     return True, "generated"
 
 

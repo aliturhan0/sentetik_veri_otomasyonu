@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import re
 import shutil
 import subprocess
@@ -67,6 +68,9 @@ def ensure_local_file(path, timeout=30):
     if not path.exists():
         raise FileNotFoundError(f"Dosya bulunamadı: {path}")
 
+    if os.name != "posix":
+        return path
+
     try:
         flags = subprocess.run(
             ["/bin/ls", "-lO", str(path)],
@@ -77,7 +81,7 @@ def ensure_local_file(path, timeout=30):
             check=False,
         ).stdout
         is_dataless = "dataless" in flags
-    except subprocess.TimeoutExpired:
+    except (FileNotFoundError, subprocess.TimeoutExpired):
         is_dataless = False
 
     if is_dataless:
@@ -94,7 +98,7 @@ def ensure_local_file(path, timeout=30):
             ).stdout
             if candidate.exists() and "dataless" not in candidate_flags:
                 return candidate
-        except (ValueError, subprocess.TimeoutExpired):
+        except (FileNotFoundError, ValueError, subprocess.TimeoutExpired):
             pass
         raise TimeoutError(
             f"Dosya yalnızca iCloud placeholder olarak mevcut: {path}. "

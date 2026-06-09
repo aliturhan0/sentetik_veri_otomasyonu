@@ -1,4 +1,5 @@
 import os
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -7,7 +8,7 @@ import traceback
 from pathlib import Path
 
 from PIL import Image, ImageOps
-from PySide6.QtCore import Qt, QThread, Signal, QTimer
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -22,8 +23,13 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QHeaderView,
     QSizePolicy,
+    QStackedWidget,
+    QStyle,
     QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -52,6 +58,25 @@ DEFAULT_CHECKPOINT = str(Path(__file__).resolve().parent / "checkpoint_epoch_29.
 PREVIEW_CACHE_DIR = Path(tempfile.gettempdir()) / "sentetik_image_previews"
 PREVIEW_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_PATH = Path(os.getenv("SENTETIK_IMAGE_LOG", Path(__file__).resolve().parent / "image_runtime.log"))
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
+TEXT_PREVIEW_SUFFIXES = {".csv", ".txt", ".md", ".log"}
+CSV_COLUMN_DESCRIPTIONS = {
+    "condition": "Uygulanan bozulma koşulu. Örn: blur_high, brightness_high, occlusion_medium.",
+    "generated_file": "RCGAN ve upscale sonrası değerlendirilen sentetik görüntü dosyası.",
+    "clean_reference": "Sentetik görüntünün karşılaştırıldığı orijinal clean referans görüntü.",
+    "clean_object_count": "YOLO'nun clean görüntüde tespit ettiği nesne sayısı.",
+    "generated_object_count": "YOLO'nun sentetik/bozulmuş görüntüde tespit ettiği nesne sayısı.",
+    "clean_avg_confidence": "Clean görüntüdeki YOLO tahminlerinin ortalama güven skoru.",
+    "generated_avg_confidence": "Sentetik görüntüdeki YOLO tahminlerinin ortalama güven skoru.",
+    "detection_drop": "Clean nesne sayısı eksi sentetik nesne sayısı. Pozitif değer tespit kaybını gösterir.",
+    "confidence_drop": "Clean güven skoru eksi sentetik güven skoru. Pozitif değer güven düşüşünü gösterir.",
+    "detection_retention": "Sentetik görüntüde korunan tespit oranı. 1'e yakın değer daha iyidir.",
+    "confidence_retention": "Sentetik görüntüde korunan güven oranı. 1'e yakın değer daha iyidir.",
+    "pixel_agreement": "Clean ve sentetik segmentasyon tahminlerinin piksel bazlı uyuşma oranı.",
+    "prediction_iou": "Clean ve sentetik segmentasyon tahminleri arasındaki IoU benzeri örtüşme skoru.",
+    "distribution_shift": "Segmentasyon sınıf dağılımlarının clean ve sentetik görüntü arasında ne kadar değiştiği.",
+    "robustness_drop": "Segmentasyon dayanıklılık kaybı. 1 - prediction_iou olarak hesaplanır.",
+}
 
 
 def debug_log(message):
@@ -99,7 +124,7 @@ class ImagePreview(QLabel):
         self._placeholder = placeholder
 
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setMinimumSize(360, 300)
+        self.setMinimumSize(260, 190)
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding,
@@ -598,9 +623,11 @@ class RCGANQtApp(QWidget):
         self.pipeline_worker = None
         self.output_paths = []
         self.selected_images = []
+        self.active_artifact_group = "outputs"
 
         self._build_ui()
         self._apply_styles()
+        self.refresh_pipeline_outputs()
         debug_log("[Görüntü] Arayüz bileşenleri hazır.")
 
     def closeEvent(self, event):
@@ -610,38 +637,103 @@ class RCGANQtApp(QWidget):
         super().closeEvent(event)
 
     def _build_ui(self):
-        root = QHBoxLayout(self)
-        root.setContentsMargins(14, 14, 14, 14)
-        root.setSpacing(14)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(10, 10, 10, 10)
+        root.setSpacing(10)
+
+        main_shell = QHBoxLayout()
+        main_shell.setSpacing(10)
+        root.addLayout(main_shell)
+
+        nav_panel = QWidget()
+        nav_panel.setObjectName("mainNav")
+        nav_layout = QVBoxLayout(nav_panel)
+        nav_layout.setContentsMargins(0, 0, 0, 0)
+        nav_layout.setSpacing(10)
+
+        self.files_nav_btn = QPushButton("1  Dosyalar")
+        self.conditions_nav_btn = QPushButton("2  Kosullar")
+        self.generate_nav_btn = QPushButton("3  Uret")
+        self.run_nav_btn = QPushButton("4  Calistir")
+        self.results_nav_btn = QPushButton("Sonuclar")
+        self.main_nav_buttons = [
+            self.files_nav_btn,
+            self.conditions_nav_btn,
+            self.generate_nav_btn,
+            self.run_nav_btn,
+            self.results_nav_btn,
+        ]
+
+        for button in self.main_nav_buttons:
+            button.setObjectName("navButton")
+            button.setCheckable(True)
+
+        self.files_nav_btn.setChecked(True)
+        self.set_button_icon(self.files_nav_btn, QStyle.StandardPixmap.SP_FileDialogDetailedView)
+        self.set_button_icon(self.conditions_nav_btn, QStyle.StandardPixmap.SP_FileDialogContentsView)
+        self.set_button_icon(self.generate_nav_btn, QStyle.StandardPixmap.SP_MediaPlay)
+        self.set_button_icon(self.run_nav_btn, QStyle.StandardPixmap.SP_ComputerIcon)
+        self.set_button_icon(self.results_nav_btn, QStyle.StandardPixmap.SP_FileDialogInfoView)
+
+        for button in self.main_nav_buttons:
+            nav_layout.addWidget(button)
+
+        nav_layout.addStretch(1)
+
+        self.main_tabs = QStackedWidget()
+        self.main_tabs.setObjectName("mainStack")
+
+        main_shell.addWidget(nav_panel, 0)
+        main_shell.addWidget(self.main_tabs, 1)
+
+        pipeline_page = QWidget()
+        pipeline_root = QHBoxLayout(pipeline_page)
+        pipeline_root.setContentsMargins(0, 0, 0, 0)
+        pipeline_root.setSpacing(10)
 
         left_scroll = QScrollArea()
         left_scroll.setWidgetResizable(True)
         left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         left_scroll.setObjectName("controlScroll")
+        left_scroll.setMinimumWidth(520)
+        left_scroll.setMaximumWidth(620)
 
         left_panel = QWidget()
         left_panel.setObjectName("controlPanel")
+        left_panel.setMinimumWidth(500)
 
         left = QVBoxLayout(left_panel)
         right = QVBoxLayout()
-        left.setSpacing(10)
-        right.setSpacing(10)
+        left.setContentsMargins(0, 0, 0, 0)
+        left.setSpacing(8)
+        right.setSpacing(8)
 
         left_scroll.setWidget(left_panel)
 
-        root.addWidget(left_scroll, 2)
-        root.addLayout(right, 3)
+        pipeline_root.addWidget(left_scroll, 0)
+        pipeline_root.addLayout(right, 1)
 
-        title = QLabel("RCGAN Robustness Pipeline")
+        title = QLabel("RCGAN Pipeline")
         title.setObjectName("title")
         left.addWidget(title)
 
+        self.control_stack = QStackedWidget()
+        self.control_stack.setObjectName("controlStack")
+
         file_group = QGroupBox("1) Dosyaları Seç")
         file_layout = QGridLayout(file_group)
+        file_layout.setColumnMinimumWidth(0, 120)
+        file_layout.setColumnStretch(0, 0)
+        file_layout.setColumnStretch(1, 1)
+        file_layout.setColumnStretch(2, 0)
+        file_layout.setHorizontalSpacing(8)
+        file_layout.setVerticalSpacing(8)
 
         self.checkpoint_edit = QLineEdit(DEFAULT_CHECKPOINT)
         self.output_edit = QLineEdit(DEFAULT_OUTPUT_DIR)
         self.detector_edit = QLineEdit(DEFAULT_DETECTOR_DIR)
+        for edit in (self.checkpoint_edit, self.output_edit, self.detector_edit):
+            edit.setMinimumWidth(0)
 
         self._add_file_row(
             file_layout,
@@ -651,8 +743,11 @@ class RCGANQtApp(QWidget):
             self.pick_checkpoint,
         )
 
-        self.select_images_btn = QPushButton("Çoklu Fotoğraf Seç")
-        self.select_folder_btn = QPushButton("Klasörden Fotoğrafları Al")
+        self.select_images_btn = QPushButton("Fotograf Sec")
+        self.select_folder_btn = QPushButton("Klasorden Al")
+
+        self.set_button_icon(self.select_images_btn, QStyle.StandardPixmap.SP_FileDialogDetailedView)
+        self.set_button_icon(self.select_folder_btn, QStyle.StandardPixmap.SP_DirOpenIcon)
 
         self.select_images_btn.clicked.connect(self.pick_multiple_images)
         self.select_folder_btn.clicked.connect(self.pick_image_folder)
@@ -685,7 +780,7 @@ class RCGANQtApp(QWidget):
             directory=True,
         )
 
-        left.addWidget(file_group)
+        self.control_stack.addWidget(file_group)
 
         condition_group = QGroupBox("2) Üretim Koşulları")
         condition_layout = QGridLayout(condition_group)
@@ -727,17 +822,29 @@ class RCGANQtApp(QWidget):
         condition_layout.addWidget(QLabel("Üretim çözünürlüğü:"), 5, 0)
         condition_layout.addWidget(self.image_size_combo, 5, 1)
 
-        left.addWidget(condition_group)
+        self.control_stack.addWidget(condition_group)
 
         action_group = QGroupBox("3) Üret")
         action_layout = QVBoxLayout(action_group)
+        action_layout.setContentsMargins(12, 18, 12, 12)
+        action_layout.setSpacing(10)
 
-        self.generate_one_btn = QPushButton("Seçilen Koşulla Zaman Serisi Üret")
-        self.generate_selected_faults_btn = QPushButton("3 Hata Tipini Seçilen Seviyelerle Üret")
-        self.open_output_btn = QPushButton("GAN Çıktı Klasörünü Aç")
-        self.open_outputs_root_btn = QPushButton("Outputs Klasörünü Aç")
-        self.open_results_root_btn = QPushButton("Results Klasörünü Aç")
-        self.clear_btn = QPushButton("Listeyi Temizle")
+        self.generate_one_btn = QPushButton("Tek Kosulla Uret")
+        self.generate_selected_faults_btn = QPushButton("3 Hata Tipini Uret")
+        self.open_output_btn = QPushButton("GAN Klasoru")
+        self.open_outputs_root_btn = QPushButton("Outputs")
+        self.open_results_root_btn = QPushButton("Results")
+        self.clear_btn = QPushButton("Temizle")
+
+        self.generate_one_btn.setObjectName("primaryButton")
+        self.generate_selected_faults_btn.setObjectName("primaryButton")
+        self.clear_btn.setObjectName("mutedButton")
+        self.set_button_icon(self.generate_one_btn, QStyle.StandardPixmap.SP_MediaPlay)
+        self.set_button_icon(self.generate_selected_faults_btn, QStyle.StandardPixmap.SP_MediaPlay)
+        self.set_button_icon(self.open_output_btn, QStyle.StandardPixmap.SP_DirOpenIcon)
+        self.set_button_icon(self.open_outputs_root_btn, QStyle.StandardPixmap.SP_DirOpenIcon)
+        self.set_button_icon(self.open_results_root_btn, QStyle.StandardPixmap.SP_DirOpenIcon)
+        self.set_button_icon(self.clear_btn, QStyle.StandardPixmap.SP_TrashIcon)
 
         self.generate_one_btn.clicked.connect(self.start_generation_single)
         self.generate_selected_faults_btn.clicked.connect(self.start_generation_selected_faults)
@@ -752,18 +859,30 @@ class RCGANQtApp(QWidget):
         action_layout.addWidget(self.open_outputs_root_btn)
         action_layout.addWidget(self.open_results_root_btn)
         action_layout.addWidget(self.clear_btn)
+        action_layout.addStretch(1)
 
-        left.addWidget(action_group)
+        self.control_stack.addWidget(action_group)
 
         pipeline_group = QGroupBox("4) Pipeline")
         pipeline_layout = QVBoxLayout(pipeline_group)
+        pipeline_layout.setContentsMargins(12, 18, 12, 12)
+        pipeline_layout.setSpacing(10)
 
-        self.pipeline_one_btn = QPushButton("Pipeline: Tek Koşul")
-        self.pipeline_selected_faults_btn = QPushButton("Pipeline: 3 Hata Tipi")
-        self.prepare_detector_btn = QPushButton("Detector Veri Setini Hazırla")
-        self.upscale_btn = QPushButton("Upscale Uygula")
-        self.yolo_btn = QPushButton("YOLO Değerlendir")
-        self.segmentation_btn = QPushButton("Segmentasyon Değerlendir")
+        self.pipeline_one_btn = QPushButton("Tam Pipeline: Tek Kosul")
+        self.pipeline_selected_faults_btn = QPushButton("Tam Pipeline: 3 Hata")
+        self.prepare_detector_btn = QPushButton("Veri Setini Hazirla")
+        self.upscale_btn = QPushButton("Upscale")
+        self.yolo_btn = QPushButton("YOLO")
+        self.segmentation_btn = QPushButton("Segmentasyon")
+
+        self.pipeline_one_btn.setObjectName("accentButton")
+        self.pipeline_selected_faults_btn.setObjectName("accentButton")
+        self.set_button_icon(self.pipeline_one_btn, QStyle.StandardPixmap.SP_MediaPlay)
+        self.set_button_icon(self.pipeline_selected_faults_btn, QStyle.StandardPixmap.SP_MediaPlay)
+        self.set_button_icon(self.prepare_detector_btn, QStyle.StandardPixmap.SP_DriveHDIcon)
+        self.set_button_icon(self.upscale_btn, QStyle.StandardPixmap.SP_ArrowUp)
+        self.set_button_icon(self.yolo_btn, QStyle.StandardPixmap.SP_FileDialogInfoView)
+        self.set_button_icon(self.segmentation_btn, QStyle.StandardPixmap.SP_FileDialogContentsView)
 
         self.pipeline_one_btn.clicked.connect(self.start_full_pipeline_single)
         self.pipeline_selected_faults_btn.clicked.connect(self.start_full_pipeline_selected_faults)
@@ -778,8 +897,26 @@ class RCGANQtApp(QWidget):
         pipeline_layout.addWidget(self.upscale_btn)
         pipeline_layout.addWidget(self.yolo_btn)
         pipeline_layout.addWidget(self.segmentation_btn)
+        pipeline_layout.addStretch(1)
 
-        left.addWidget(pipeline_group)
+        self.control_stack.addWidget(pipeline_group)
+
+        status_group = QGroupBox("5) Pipeline Durumu")
+        status_layout = QVBoxLayout(status_group)
+
+        self.refresh_status_btn = QPushButton("Model ve Paketleri Kontrol Et")
+        self.set_button_icon(self.refresh_status_btn, QStyle.StandardPixmap.SP_BrowserReload)
+        self.refresh_status_btn.clicked.connect(self.refresh_pipeline_status)
+
+        self.pipeline_status_box = QTextEdit()
+        self.pipeline_status_box.setReadOnly(True)
+        self.pipeline_status_box.setMinimumHeight(150)
+        self.pipeline_status_box.setPlaceholderText("Pipeline modeli ve paket durumu burada gorunecek...")
+
+        status_layout.addWidget(self.refresh_status_btn)
+        status_layout.addWidget(self.pipeline_status_box)
+
+        left.addWidget(self.control_stack, 1)
 
         preview_title = QLabel("Önizleme ve Çıktılar")
         preview_title.setObjectName("subtitle")
@@ -789,11 +926,13 @@ class RCGANQtApp(QWidget):
 
         self.curr_preview = ImagePreview("Seçilen clean frame önizleme")
         self.out_preview = ImagePreview("Üretilen görüntü önizleme")
+        self.curr_preview.setMaximumHeight(320)
+        self.out_preview.setMaximumHeight(320)
 
         preview_row.addWidget(self.curr_preview, 1)
         preview_row.addWidget(self.out_preview, 1)
 
-        right.addLayout(preview_row, 3)
+        right.addLayout(preview_row, 2)
 
         self.output_list = QListWidget()
         self.output_list.itemSelectionChanged.connect(self.preview_selected_output)
@@ -803,6 +942,7 @@ class RCGANQtApp(QWidget):
         self.log_box.setPlaceholderText("İşlem kayıtları burada görünecek...")
 
         tabs = QTabWidget()
+        self.pipeline_tabs = tabs
         output_tab = QWidget()
         output_layout = QVBoxLayout(output_tab)
         output_layout.addWidget(self.output_list)
@@ -812,9 +952,83 @@ class RCGANQtApp(QWidget):
         log_layout.addWidget(self.log_box)
 
         tabs.addTab(output_tab, "Çıktılar")
+        results_tab = QWidget()
+        artifacts_layout = QVBoxLayout(results_tab)
+
+        results_title = QLabel("Model Ciktilari ve Sayisal Sonuclar")
+        results_title.setObjectName("subtitle")
+        artifacts_layout.addWidget(results_title)
+
+        artifact_filter_buttons = QHBoxLayout()
+        self.outputs_filter_btn = QPushButton("Outputs")
+        self.results_filter_btn = QPushButton("Results")
+        self.outputs_filter_btn.setObjectName("filterButton")
+        self.results_filter_btn.setObjectName("filterButton")
+        self.outputs_filter_btn.setCheckable(True)
+        self.results_filter_btn.setCheckable(True)
+        self.outputs_filter_btn.setChecked(True)
+        self.set_button_icon(self.outputs_filter_btn, QStyle.StandardPixmap.SP_DirIcon)
+        self.set_button_icon(self.results_filter_btn, QStyle.StandardPixmap.SP_FileDialogInfoView)
+        self.outputs_filter_btn.clicked.connect(lambda: self.set_artifact_group("outputs"))
+        self.results_filter_btn.clicked.connect(lambda: self.set_artifact_group("results"))
+        artifact_filter_buttons.addWidget(self.outputs_filter_btn)
+        artifact_filter_buttons.addWidget(self.results_filter_btn)
+        artifacts_layout.addLayout(artifact_filter_buttons)
+
+        artifact_buttons = QHBoxLayout()
+        self.refresh_artifacts_btn = QPushButton("Pipeline Ciktilarini Yenile")
+        self.open_artifact_btn = QPushButton("Secili Dosyayi Ac")
+        self.open_artifact_folder_btn = QPushButton("Secili Klasoru Ac")
+
+        self.refresh_artifacts_btn.setObjectName("primaryButton")
+        self.set_button_icon(self.refresh_artifacts_btn, QStyle.StandardPixmap.SP_BrowserReload)
+        self.set_button_icon(self.open_artifact_btn, QStyle.StandardPixmap.SP_FileIcon)
+        self.set_button_icon(self.open_artifact_folder_btn, QStyle.StandardPixmap.SP_DirOpenIcon)
+
+        self.refresh_artifacts_btn.clicked.connect(self.refresh_pipeline_outputs)
+        self.open_artifact_btn.clicked.connect(self.open_selected_artifact)
+        self.open_artifact_folder_btn.clicked.connect(self.open_selected_artifact_folder)
+
+        artifact_buttons.addWidget(self.refresh_artifacts_btn)
+        artifact_buttons.addWidget(self.open_artifact_btn)
+        artifact_buttons.addWidget(self.open_artifact_folder_btn)
+
+        self.artifact_list = QListWidget()
+        self.artifact_list.itemSelectionChanged.connect(self.preview_selected_artifact)
+
+        self.artifact_preview = ImagePreview("Pipeline ciktisi onizleme")
+        self.artifact_text_preview = QTextEdit()
+        self.artifact_text_preview.setReadOnly(True)
+        self.artifact_text_preview.setMinimumHeight(130)
+        self.artifact_text_preview.setPlaceholderText("CSV ve metin ciktisi burada gorunecek...")
+
+        self.artifact_table_preview = QTableWidget()
+        self.artifact_table_preview.setObjectName("metricTable")
+        self.artifact_table_preview.setAlternatingRowColors(True)
+        self.artifact_table_preview.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.artifact_table_preview.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.artifact_table_preview.horizontalHeader().setStretchLastSection(True)
+        self.artifact_table_preview.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.artifact_table_preview.verticalHeader().setVisible(False)
+        self.artifact_table_preview.setVisible(False)
+
+        results_body = QHBoxLayout()
+        results_left = QVBoxLayout()
+        results_right = QVBoxLayout()
+
+        results_left.addLayout(artifact_buttons)
+        results_left.addWidget(self.artifact_list, 1)
+        results_right.addWidget(self.artifact_preview, 2)
+        results_right.addWidget(self.artifact_table_preview, 2)
+        results_right.addWidget(self.artifact_text_preview, 1)
+
+        results_body.addLayout(results_left, 2)
+        results_body.addLayout(results_right, 3)
+        artifacts_layout.addLayout(results_body, 1)
+
         tabs.addTab(log_tab, "Log")
 
-        right.addWidget(tabs, 2)
+        right.addWidget(tabs, 1)
 
         hint = QLabel(
             "Not: Seçilen görüntüler dosya adına göre sıralanır. "
@@ -825,6 +1039,14 @@ class RCGANQtApp(QWidget):
         hint.setObjectName("hint")
 
         right.addWidget(hint)
+
+        self.main_tabs.addWidget(pipeline_page)
+        self.main_tabs.addWidget(results_tab)
+        self.files_nav_btn.clicked.connect(lambda: self.switch_main_page(0))
+        self.conditions_nav_btn.clicked.connect(lambda: self.switch_main_page(1))
+        self.generate_nav_btn.clicked.connect(lambda: self.switch_main_page(2))
+        self.run_nav_btn.clicked.connect(lambda: self.switch_main_page(3))
+        self.results_nav_btn.clicked.connect(lambda: self.switch_main_page(4))
 
         self._action_buttons = [
             self.generate_one_btn,
@@ -838,16 +1060,47 @@ class RCGANQtApp(QWidget):
             self.open_output_btn,
             self.open_outputs_root_btn,
             self.open_results_root_btn,
+            self.refresh_artifacts_btn,
+            self.open_artifact_btn,
+            self.open_artifact_folder_btn,
+            self.outputs_filter_btn,
+            self.results_filter_btn,
             self.clear_btn,
             self.select_images_btn,
             self.select_folder_btn,
         ]
+
+    def switch_main_page(self, index):
+        if index == 4:
+            self.main_tabs.setCurrentIndex(1)
+        else:
+            self.main_tabs.setCurrentIndex(0)
+            self.control_stack.setCurrentIndex(index)
+
+        for button_index, button in enumerate(self.main_nav_buttons):
+            button.setChecked(button_index == index)
+
+    def show_log_tab(self):
+        if hasattr(self, "pipeline_tabs"):
+            self.pipeline_tabs.setCurrentIndex(1)
+
+    def append_log(self, message):
+        self.show_log_tab()
+        self.log_box.append(str(message))
+        QApplication.processEvents()
+
+    def set_button_icon(self, button, standard_pixmap):
+        button.setIcon(self.style().standardIcon(standard_pixmap))
+        button.setIconSize(QSize(18, 18))
 
     def _add_file_row(self, layout, row, label_text, edit, picker, directory=False):
         layout.addWidget(QLabel(label_text + ":"), row, 0)
         layout.addWidget(edit, row, 1)
 
         btn = QPushButton("Seç")
+        self.set_button_icon(btn, QStyle.StandardPixmap.SP_DialogOpenButton)
+        btn.setMinimumWidth(72)
+        btn.setMaximumWidth(92)
         btn.clicked.connect(picker)
 
         layout.addWidget(btn, row, 2)
@@ -855,31 +1108,32 @@ class RCGANQtApp(QWidget):
     def _apply_styles(self):
         self.setStyleSheet("""
             QWidget {
+                font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
                 font-size: 14px;
-                color: #e5eefb;
-                background: #070b13;
+                color: #e8ecf4;
+                background: #06080f;
             }
 
             QWidget#controlPanel {
-                background: #070b13;
+                background: transparent;
             }
 
             QScrollArea#controlScroll {
                 border: none;
-                background: #070b13;
+                background: transparent;
             }
 
             QScrollBar:vertical {
-                background: #101827;
-                width: 10px;
+                background: transparent;
+                width: 6px;
                 margin: 0;
                 border-radius: 5px;
             }
 
             QScrollBar::handle:vertical {
-                background: #2dd4bf;
+                background: rgba(34, 211, 238, 0.35);
                 min-height: 32px;
-                border-radius: 5px;
+                border-radius: 3px;
             }
 
             QScrollBar::add-line:vertical,
@@ -888,64 +1142,167 @@ class RCGANQtApp(QWidget):
             }
 
             QLabel#title {
-                font-size: 25px;
+                font-size: 23px;
                 font-weight: 700;
-                margin: 2px 0 8px 0;
-                color: #f8fafc;
+                margin: 2px 0 6px 0;
+                color: #ffffff;
             }
 
             QLabel#subtitle {
-                font-size: 19px;
+                font-size: 17px;
                 font-weight: 700;
-                color: #f8fafc;
+                color: #ffffff;
             }
 
             QLabel#hint {
-                color: #9fb2ca;
-                padding: 10px;
-                background: #0f172a;
-                border: 1px solid #1f2a44;
+                color: #a0aec0;
+                padding: 11px 12px;
+                background: #0c1017;
+                border: 1px solid rgba(255, 255, 255, 0.06);
                 border-radius: 8px;
             }
 
             QLabel#preview {
-                border: 1px solid #23314f;
+                border: 1px solid rgba(148, 163, 184, 0.16);
                 border-radius: 8px;
-                background: #0b1120;
+                background: #10151f;
             }
 
             QPushButton {
-                padding: 9px 12px;
-                border-radius: 7px;
-                border: 1px solid #263657;
-                background: #111827;
-                color: #e5eefb;
-                font-weight: 650;
+                min-height: 20px;
+                padding: 8px 12px;
+                border-radius: 10px;
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                background: #111620;
+                color: #a0aec0;
+                font-weight: 600;
             }
 
             QPushButton:hover {
-                background: #12243c;
-                border-color: #2dd4bf;
+                background: #181e2a;
+                border-color: rgba(99, 102, 241, 0.3);
+                color: #e8ecf4;
             }
 
             QPushButton:pressed {
-                background: #0e7490;
+                background: #2f5fbf;
             }
 
             QPushButton:disabled {
-                color: #5f6f85;
-                background: #0d1422;
-                border-color: #1a263c;
+                color: #687180;
+                background: #171a20;
+                border-color: #272c35;
+            }
+
+            QPushButton#primaryButton {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #6366f1, stop:1 #8b5cf6
+                );
+                border-color: rgba(99, 102, 241, 0.4);
+                color: #ffffff;
+                font-weight: 700;
+            }
+
+            QPushButton#primaryButton:hover {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #818cf8, stop:1 #a78bfa
+                );
+                border-color: rgba(139, 92, 246, 0.6);
+            }
+
+            QPushButton#accentButton {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #6d5dfc, stop:1 #22d3ee
+                );
+                border-color: rgba(34, 211, 238, 0.35);
+                color: #ffffff;
+                font-weight: 700;
+            }
+
+            QPushButton#accentButton:hover {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #818cf8, stop:1 #67e8f9
+                );
+                border-color: rgba(34, 211, 238, 0.55);
+            }
+
+            QPushButton#mutedButton {
+                color: #c4cad4;
+                background: #191c22;
+                border-color: #303744;
+            }
+
+            QWidget#mainNav {
+                min-width: 150px;
+                max-width: 170px;
+                background: #0d121b;
+                border: 1px solid rgba(148, 163, 184, 0.16);
+                border-radius: 12px;
+                padding: 10px;
+            }
+
+            QPushButton#navButton {
+                min-height: 40px;
+                padding: 0 10px;
+                text-align: left;
+                border-radius: 8px;
+                border: 1px solid transparent;
+                background: transparent;
+                color: #a8b3c7;
+                font-weight: 800;
+            }
+
+            QPushButton#navButton:hover {
+                color: #eef2ff;
+                background: rgba(109, 93, 252, 0.10);
+                border-color: rgba(109, 93, 252, 0.24);
+            }
+
+            QPushButton#navButton:checked {
+                color: #ffffff;
+                background: rgba(109, 93, 252, 0.18);
+                border-color: rgba(109, 93, 252, 0.45);
+            }
+
+            QPushButton#filterButton {
+                min-height: 38px;
+                text-align: left;
+                border-radius: 8px;
+                background: #111620;
+                color: #a8b3c7;
+                border: 1px solid rgba(148, 163, 184, 0.16);
+                font-weight: 800;
+            }
+
+            QPushButton#filterButton:hover {
+                color: #eef2ff;
+                border-color: rgba(34, 211, 238, 0.35);
+            }
+
+            QPushButton#filterButton:checked {
+                color: #ffffff;
+                background: rgba(34, 211, 238, 0.12);
+                border-color: rgba(34, 211, 238, 0.45);
             }
 
             QLineEdit,
             QComboBox {
-                padding: 7px;
-                border-radius: 6px;
-                border: 1px solid #263657;
-                background: #0b1120;
-                color: #e5eefb;
-                selection-background-color: #0891b2;
+                min-height: 20px;
+                padding: 6px 8px;
+                border-radius: 8px;
+                border: 1px solid #343b48;
+                background: #10151f;
+                color: #e8ecf4;
+                selection-background-color: rgba(99, 102, 241, 0.35);
+            }
+
+            QLineEdit:focus,
+            QComboBox:focus {
+                border-color: rgba(34, 211, 238, 0.55);
             }
 
             QComboBox::drop-down {
@@ -957,61 +1314,122 @@ class RCGANQtApp(QWidget):
                 image: none;
                 border-left: 5px solid transparent;
                 border-right: 5px solid transparent;
-                border-top: 6px solid #67e8f9;
+                border-top: 6px solid #22d3ee;
             }
 
             QComboBox QAbstractItemView {
-                background: #0b1120;
-                color: #e5eefb;
-                border: 1px solid #263657;
-                selection-background-color: #0e7490;
+                background: #10151f;
+                color: #e8ecf4;
+                border: 1px solid rgba(148, 163, 184, 0.16);
+                selection-background-color: rgba(99, 102, 241, 0.35);
             }
 
             QTextEdit,
             QListWidget {
-                border: 1px solid #263657;
+                border: 1px solid rgba(148, 163, 184, 0.16);
                 border-radius: 8px;
-                background: #0b1120;
-                color: #dbeafe;
-                selection-background-color: #0e7490;
+                background: #10151f;
+                color: #e7edf6;
+                selection-background-color: rgba(99, 102, 241, 0.35);
+                selection-color: #ffffff;
+                padding: 4px;
+            }
+
+            QTableWidget#metricTable {
+                border: 1px solid rgba(148, 163, 184, 0.16);
+                border-radius: 8px;
+                gridline-color: rgba(148, 163, 184, 0.16);
+                background: #10151f;
+                alternate-background-color: #151b27;
+                color: #e8ecf4;
+                selection-background-color: rgba(109, 93, 252, 0.35);
+                selection-color: #ffffff;
+            }
+
+            QTableWidget#metricTable::item {
+                padding: 6px;
+            }
+
+            QHeaderView::section {
+                padding: 8px 10px;
+                border: none;
+                border-right: 1px solid rgba(148, 163, 184, 0.16);
+                border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+                background: #151b27;
+                color: #22d3ee;
+                font-weight: 800;
             }
 
             QTabWidget::pane {
-                border: 1px solid #263657;
+                border: 1px solid rgba(148, 163, 184, 0.16);
                 border-radius: 8px;
-                background: #0b1120;
+                background: #10151f;
             }
 
             QTabBar::tab {
-                padding: 8px 14px;
-                border: 1px solid #263657;
+                padding: 9px 14px;
+                border: 1px solid rgba(148, 163, 184, 0.16);
                 border-bottom: none;
-                background: #101827;
-                color: #9fb2ca;
+                background: #111620;
+                color: #a0aec0;
                 border-top-left-radius: 7px;
                 border-top-right-radius: 7px;
             }
 
+            QTabBar::tab:hover {
+                color: #ffffff;
+                background: #181e2a;
+            }
+
             QTabBar::tab:selected {
-                background: #0b1120;
-                color: #f8fafc;
+                background: #10151f;
+                color: #ffffff;
                 font-weight: 700;
+            }
+
+            QTabWidget#mainTabs::pane {
+                border: none;
+                background: transparent;
+            }
+
+            QTabBar#mainTabBar::tab {
+                min-width: 104px;
+                min-height: 46px;
+                padding: 12px 10px;
+                margin: 0 8px 8px 0;
+                border: 1px solid #303744;
+                border-radius: 8px;
+                background: #181b20;
+                color: #aeb7c5;
+            }
+
+            QTabBar#mainTabBar::tab:selected {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #6366f1, stop:1 #8b5cf6
+                );
+                border-color: rgba(139, 92, 246, 0.6);
+                color: #ffffff;
             }
 
             QGroupBox {
                 font-weight: 700;
-                margin-top: 12px;
+                margin-top: 10px;
                 padding: 12px 10px 10px 10px;
-                border: 1px solid #23314f;
-                border-radius: 8px;
-                background: #0f172a;
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                border-radius: 12px;
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 rgba(17,22,32,0.95),
+                    stop:1 rgba(24,30,42,0.90)
+                );
             }
 
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 10px;
-                padding: 0 5px;
-                color: #67e8f9;
+                padding: 0 6px;
+                color: #e8ecf4;
             }
         """)
 
@@ -1139,6 +1557,9 @@ class RCGANQtApp(QWidget):
                 missing.append(f"Görüntü bulunamadı: {path}")
 
         if missing:
+            self.append_log("Pipeline/uretim baslatilamadi. Eksik girdiler:")
+            for item in missing:
+                self.append_log(f"- {item}")
             QMessageBox.warning(
                 self,
                 "Eksik dosya",
@@ -1170,6 +1591,9 @@ class RCGANQtApp(QWidget):
                 missing.append(f"Detector dosyası bulunamadı: {detector_path / name}")
 
         if missing:
+            self.append_log("Detector adimi baslatilamadi. Eksik dosyalar:")
+            for item in missing:
+                self.append_log(f"- {item}")
             QMessageBox.warning(
                 self,
                 "Detector eksik",
@@ -1188,6 +1612,91 @@ class RCGANQtApp(QWidget):
 
     def selected_image_size(self):
         return int(self.image_size_combo.currentText().split(" ", 1)[0])
+
+    def dependency_available(self, module_name):
+        return importlib.util.find_spec(module_name) is not None
+
+    def build_pipeline_status(self, mode="full"):
+        detector_dir = Path(self.detector_edit.text().strip() or DEFAULT_DETECTOR_DIR)
+        checkpoint = Path(self.checkpoint_edit.text().strip() or DEFAULT_CHECKPOINT)
+        edsr_model = detector_dir / "EDSR_x4.pb"
+        yolo_model = detector_dir / "yolov8n.pt"
+
+        lines = []
+        issues = []
+
+        def add_file_status(label, path, required=True):
+            if path.exists():
+                size_mb = path.stat().st_size / (1024 * 1024)
+                lines.append(f"OK  {label}: {path} ({size_mb:.1f} MB)")
+            else:
+                message = f"EKSIK  {label}: {path}"
+                lines.append(message)
+                if required:
+                    issues.append(message)
+
+        def add_package_status(label, module_name, required=True):
+            if self.dependency_available(module_name):
+                lines.append(f"OK  {label}: {module_name}")
+            else:
+                message = f"EKSIK  {label}: pip install {module_name}"
+                lines.append(message)
+                if required:
+                    issues.append(message)
+
+        lines.append("Pipeline on kontrol")
+        lines.append("")
+
+        if mode in {"full", "generate"}:
+            add_file_status("RCGAN checkpoint", checkpoint)
+
+        if mode in {"full", "upscale"}:
+            add_file_status("EDSR modeli", edsr_model)
+            try:
+                import cv2
+
+                if hasattr(cv2, "dnn_superres"):
+                    lines.append("OK  OpenCV dnn_superres: opencv-contrib-python aktif")
+                else:
+                    message = "EKSIK  OpenCV dnn_superres: opencv-contrib-python gerekli"
+                    lines.append(message)
+                    issues.append(message)
+            except Exception as exc:
+                message = f"EKSIK  OpenCV import edilemedi: {exc}"
+                lines.append(message)
+                issues.append(message)
+
+        if mode in {"full", "yolo"}:
+            add_file_status("YOLO modeli", yolo_model)
+            add_package_status("YOLO paketi", "ultralytics")
+
+        if mode in {"full", "segmentation"}:
+            add_package_status("SegFormer paketi", "transformers")
+            add_package_status("Safetensors", "safetensors", required=False)
+            add_package_status("Accelerate", "accelerate", required=False)
+
+            try:
+                from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor  # noqa: F401
+
+                lines.append("OK  SegFormer siniflari import ediliyor")
+                lines.append("OK  SegFormer model adi: nvidia/segformer-b0-finetuned-cityscapes-1024-1024")
+            except Exception as exc:
+                message = f"EKSIK  SegFormer import hatasi: {exc}"
+                lines.append(message)
+                issues.append(message)
+
+        lines.append("")
+
+        if issues:
+            lines.append("Durum: EKSIK VAR, pipeline baslamadan once duzelt.")
+        else:
+            lines.append("Durum: HAZIR")
+
+        return lines, issues
+
+    def refresh_pipeline_status(self):
+        lines, _issues = self.build_pipeline_status(mode="full")
+        self.pipeline_status_box.setPlainText("\n".join(lines))
 
     def start_generation_single(self):
         self.start_generation(
@@ -1208,6 +1717,7 @@ class RCGANQtApp(QWidget):
 
         checkpoint, image_paths, out_dir = values
 
+        self.show_log_tab()
         self.set_buttons_enabled(False)
         self.output_list.clear()
         self.out_preview.clear_image()
@@ -1222,6 +1732,8 @@ class RCGANQtApp(QWidget):
         )
         self.log_box.append(f"Toplam üretilecek çıktı sayısı: {total_outputs}")
         self.log_box.append(f"Üretim çözünürlüğü: {self.selected_image_size()} px")
+
+        QApplication.processEvents()
 
         self.worker = InferenceWorker(
             checkpoint=checkpoint,
@@ -1241,6 +1753,7 @@ class RCGANQtApp(QWidget):
         self.worker.start()
 
     def start_full_pipeline_single(self):
+        self.append_log("\n--- Tam Pipeline butonuna basildi: Tek Kosul ---")
         self.start_full_pipeline(
             conditions=[(
                 self.fault_combo.currentText(),
@@ -1249,20 +1762,27 @@ class RCGANQtApp(QWidget):
         )
 
     def start_full_pipeline_selected_faults(self):
+        self.append_log("\n--- Tam Pipeline butonuna basildi: 3 Hata ---")
         self.start_full_pipeline(conditions=self.selected_fault_conditions())
 
     def start_full_pipeline(self, conditions):
+        self.append_log("Pipeline girdileri kontrol ediliyor...")
         values = self.validate_inputs()
         detector_dir = self.validate_detector_dir()
 
         if values is None or detector_dir is None:
+            self.append_log("Pipeline durduruldu: gerekli girdi/model dosyalarindan biri eksik.")
             return
 
         checkpoint, image_paths, out_dir = values
+        self.append_log("Temel dosya kontrolleri tamam. Pipeline worker baslatiliyor...")
 
         self.output_list.clear()
         self.out_preview.clear_image()
         self.log_box.append("\n--- Pipeline kuyruğa alındı ---")
+
+        self.show_log_tab()
+        QApplication.processEvents()
 
         self.pipeline_worker = PipelineWorker(
             mode="full",
@@ -1280,6 +1800,7 @@ class RCGANQtApp(QWidget):
         self.start_pipeline_worker(self.pipeline_worker)
 
     def start_prepare_detector(self):
+        self.append_log("\n--- Veri Setini Hazirla butonuna basildi ---")
         detector_dir = self.validate_detector_dir()
 
         if detector_dir is None:
@@ -1311,10 +1832,21 @@ class RCGANQtApp(QWidget):
         self.start_pipeline_worker(self.pipeline_worker)
 
     def start_upscale(self):
+        self.append_log("\n--- Upscale butonuna basildi ---")
         detector_dir = self.validate_detector_dir()
 
         if detector_dir is None:
             return
+
+        lines, issues = self.build_pipeline_status(mode="upscale")
+        self.pipeline_status_box.setPlainText("\n".join(lines))
+
+        if issues:
+            QMessageBox.warning(self, "Upscale eksikleri", "\n".join(issues))
+            return
+
+        self.show_log_tab()
+        QApplication.processEvents()
 
         self.pipeline_worker = PipelineWorker(
             mode="upscale",
@@ -1325,9 +1857,17 @@ class RCGANQtApp(QWidget):
         self.start_pipeline_worker(self.pipeline_worker)
 
     def start_yolo(self):
+        self.append_log("\n--- YOLO butonuna basildi ---")
         detector_dir = self.validate_detector_dir()
 
         if detector_dir is None:
+            return
+
+        lines, issues = self.build_pipeline_status(mode="yolo")
+        self.pipeline_status_box.setPlainText("\n".join(lines))
+
+        if issues:
+            QMessageBox.warning(self, "YOLO eksikleri", "\n".join(issues))
             return
 
         self.pipeline_worker = PipelineWorker(
@@ -1339,9 +1879,17 @@ class RCGANQtApp(QWidget):
         self.start_pipeline_worker(self.pipeline_worker)
 
     def start_segmentation(self):
+        self.append_log("\n--- Segmentasyon butonuna basildi ---")
         detector_dir = self.validate_detector_dir()
 
         if detector_dir is None:
+            return
+
+        lines, issues = self.build_pipeline_status(mode="segmentation")
+        self.pipeline_status_box.setPlainText("\n".join(lines))
+
+        if issues:
+            QMessageBox.warning(self, "Segmentasyon eksikleri", "\n".join(issues))
             return
 
         self.pipeline_worker = PipelineWorker(
@@ -1353,7 +1901,11 @@ class RCGANQtApp(QWidget):
         self.start_pipeline_worker(self.pipeline_worker)
 
     def start_pipeline_worker(self, worker):
+        self.show_log_tab()
         self.set_buttons_enabled(False)
+        debug_log(f"[Goruntu] Pipeline worker start requested: {worker.mode}")
+        self.log_box.append(f"\n--- Pipeline adimi baslatildi: {worker.mode} ---")
+        QApplication.processEvents()
         worker.log.connect(self.log_box.append)
         worker.finished_ok.connect(self.on_pipeline_finished)
         worker.failed.connect(self.on_failed)
@@ -1376,6 +1928,10 @@ class RCGANQtApp(QWidget):
 
         self.log_box.append("Pipeline adımı tamamlandı.")
 
+        self.refresh_pipeline_outputs()
+
+        self.switch_main_page(4)
+
     def on_finished(self, paths):
         self.set_buttons_enabled(True)
 
@@ -1391,9 +1947,12 @@ class RCGANQtApp(QWidget):
 
         self.log_box.append("İşlem tamamlandı.")
 
+        self.refresh_pipeline_outputs()
+
     def on_failed(self, error_text):
         self.set_buttons_enabled(True)
 
+        self.show_log_tab()
         self.log_box.append(error_text)
 
         QMessageBox.critical(
@@ -1447,15 +2006,223 @@ class RCGANQtApp(QWidget):
 
         self.show_image(items[0].text(), self.out_preview)
 
+    def set_artifact_group(self, group_name):
+        self.active_artifact_group = group_name
+        self.outputs_filter_btn.setChecked(group_name == "outputs")
+        self.results_filter_btn.setChecked(group_name == "results")
+        self.refresh_pipeline_outputs()
+
+    def refresh_pipeline_outputs(self):
+        output_roots = [
+            DEFAULT_OUTPUTS_ROOT / "gan_generated",
+            DEFAULT_OUTPUTS_ROOT / "gan_upscaled",
+            DEFAULT_OUTPUTS_ROOT / "segmentation_outputs",
+            DEFAULT_OUTPUTS_ROOT / "segmentation_comparisons",
+            DEFAULT_OUTPUTS_ROOT / "yolo_comparisons",
+        ]
+        result_roots = [
+            DEFAULT_RESULTS_ROOT / "yolo",
+            DEFAULT_RESULTS_ROOT / "segmentation",
+        ]
+
+        if self.active_artifact_group == "results":
+            roots = result_roots
+            group_label = "Results"
+        else:
+            roots = output_roots
+            group_label = "Outputs"
+            self.active_artifact_group = "outputs"
+
+        artifact_paths = []
+
+        for root in roots:
+            if not root.exists():
+                continue
+
+            for path in root.rglob("*"):
+                if not path.is_file():
+                    continue
+
+                suffix = path.suffix.lower()
+
+                if suffix in IMAGE_SUFFIXES or suffix in TEXT_PREVIEW_SUFFIXES:
+                    artifact_paths.append(path)
+
+        def artifact_sort_key(path):
+            try:
+                parent = str(path.parent.relative_to(PROJECT_ROOT))
+            except ValueError:
+                parent = str(path.parent)
+
+            return parent, path.name
+
+        artifact_paths = sorted(artifact_paths, key=artifact_sort_key)
+
+        self.artifact_list.clear()
+        self.artifact_preview.clear_image()
+        self.artifact_text_preview.clear()
+        self.artifact_table_preview.clear()
+        self.artifact_table_preview.setVisible(False)
+        self.artifact_preview.setVisible(True)
+
+        for path in artifact_paths:
+            try:
+                display_path = path.relative_to(PROJECT_ROOT)
+            except ValueError:
+                display_path = path
+
+            self.artifact_list.addItem(str(display_path))
+
+        if artifact_paths:
+            self.artifact_list.setCurrentRow(0)
+
+        self.log_box.append(f"{group_label} listesi yenilendi: {len(artifact_paths)} dosya.")
+
+    def selected_artifact_path(self):
+        items = self.artifact_list.selectedItems()
+
+        if not items:
+            return None
+
+        path = Path(items[0].text())
+
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+
+        return path
+
+    def preview_selected_artifact(self):
+        path = self.selected_artifact_path()
+
+        if path is None:
+            return
+
+        if not path.exists():
+            self.artifact_preview.clear_image()
+            self.artifact_text_preview.setPlainText("Dosya bulunamadi.")
+            return
+
+        suffix = path.suffix.lower()
+        self.artifact_text_preview.clear()
+
+        if suffix in IMAGE_SUFFIXES:
+            self.artifact_table_preview.setVisible(False)
+            self.artifact_preview.setVisible(True)
+            self.show_image(path, self.artifact_preview)
+            self.artifact_text_preview.setPlainText(str(path))
+            return
+
+        self.artifact_preview.clear_image()
+
+        if suffix in TEXT_PREVIEW_SUFFIXES:
+            if suffix == ".csv":
+                self.artifact_preview.setVisible(False)
+                self.artifact_table_preview.setVisible(True)
+                self.populate_csv_table(path)
+                self.artifact_text_preview.setPlainText(self.format_csv_preview(path))
+                return
+
+            self.artifact_table_preview.setVisible(False)
+            self.artifact_preview.setVisible(True)
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError as exc:
+                text = f"Dosya okunamadi:\n{exc}"
+
+            lines = text.splitlines()
+
+            if len(lines) > 160:
+                text = "\n".join(lines[:160]) + "\n\n... sadece ilk 160 satir gosteriliyor."
+
+            self.artifact_text_preview.setPlainText(text)
+            return
+
+        self.artifact_text_preview.setPlainText(str(path))
+
+    def populate_csv_table(self, path):
+        try:
+            import pandas as pd
+
+            df = pd.read_csv(path)
+        except Exception:
+            self.artifact_table_preview.clear()
+            self.artifact_table_preview.setRowCount(0)
+            self.artifact_table_preview.setColumnCount(0)
+            return
+
+        preview = df.head(60).copy()
+
+        for column in preview.columns:
+            if pd.api.types.is_float_dtype(preview[column]):
+                preview[column] = preview[column].round(4)
+
+        self.artifact_table_preview.clear()
+        self.artifact_table_preview.setRowCount(len(preview))
+        self.artifact_table_preview.setColumnCount(len(preview.columns))
+        self.artifact_table_preview.setVisible(True)
+        self.artifact_table_preview.setHorizontalHeaderLabels([str(column) for column in preview.columns])
+
+        for row_index, (_idx, row) in enumerate(preview.iterrows()):
+            for col_index, value in enumerate(row):
+                item = QTableWidgetItem("" if pd.isna(value) else str(value))
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.artifact_table_preview.setItem(row_index, col_index, item)
+
+        self.artifact_table_preview.resizeRowsToContents()
+
+    def format_csv_preview(self, path):
+        try:
+            import pandas as pd
+
+            df = pd.read_csv(path)
+        except Exception as exc:
+            return f"CSV okunamadi:\n{exc}"
+
+        lines = []
+        lines.append("Sutun Aciklamalari")
+        for column in df.columns:
+            description = CSV_COLUMN_DESCRIPTIONS.get(column, "Bu CSV icindeki ek metrik/alan.")
+            lines.append(f"- {column}: {description}")
+
+        return "\n".join(lines)
+
+    def open_selected_artifact(self):
+        path = self.selected_artifact_path()
+
+        if path is None or not path.exists():
+            return
+
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", str(path)])
+        elif sys.platform.startswith("win"):
+            os.startfile(path)
+        else:
+            subprocess.Popen(["xdg-open", str(path)])
+
+    def open_selected_artifact_folder(self):
+        path = self.selected_artifact_path()
+
+        if path is None:
+            return
+
+        folder = path.parent if path.is_file() else path
+        self.open_folder(folder)
+
     def clear_outputs(self):
         self.output_paths = []
         self.selected_images = []
 
         self.output_list.clear()
         self.input_list.clear()
+        self.artifact_list.clear()
 
         self.out_preview.clear_image()
         self.curr_preview.clear_image()
+        self.artifact_preview.clear_image()
+        self.artifact_text_preview.clear()
+        self.artifact_table_preview.clear()
+        self.artifact_table_preview.setVisible(False)
+        self.artifact_preview.setVisible(True)
 
         self.log_box.append("Listeler temizlendi.")
 
