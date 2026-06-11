@@ -55,10 +55,15 @@ def reset_dir(path):
 
 
 def opencv_safe_model_path(model_path):
+    import sys
     model_path = os.fspath(model_path)
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"EDSR model dosyasi bulunamadi: {model_path}")
+
+    # macOS ve Linux'ta OpenCV dosya yollarini sorunsuz okur, cache'e gerek yoktur.
+    if sys.platform != "win32":
+        return model_path
 
     if not os.path.isabs(model_path):
         return model_path
@@ -71,8 +76,16 @@ def opencv_safe_model_path(model_path):
     if relative_path and not relative_path.startswith("..") and not os.path.isabs(relative_path):
         return relative_path
 
-    cache_root = os.path.join(os.path.splitdrive(model_path)[0] + os.sep, "sentetik_model_cache")
-    os.makedirs(cache_root, exist_ok=True)
+    # Windows icin cache dizini olustur
+    drive = os.path.splitdrive(model_path)[0] or "C:"
+    cache_root = os.path.join(drive + os.sep, "sentetik_model_cache")
+    try:
+        os.makedirs(cache_root, exist_ok=True)
+    except OSError:
+        # Eger drive root'a yazma yetkisi yoksa temp dizinini kullan
+        import tempfile
+        cache_root = os.path.join(tempfile.gettempdir(), "sentetik_model_cache")
+        os.makedirs(cache_root, exist_ok=True)
 
     cached_model_path = os.path.join(cache_root, os.path.basename(model_path))
 
