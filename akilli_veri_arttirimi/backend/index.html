@@ -241,10 +241,24 @@
                         <div class="sim-kpi accent"><small>Risk Seviyesi</small><strong id="sk-risk">—</strong></div>
                     </div>
 
-                    <!-- Anomali Açıklama Kartı -->
-                    <div class="sim-description glass-card" id="sim-description">
-                        <div class="card-title"><i class="fa-solid fa-circle-info"></i> <span id="sim-desc-title">Spike Anomalisi</span></div>
-                        <p id="sim-desc-text">Kısa süreli ani yüksek sapma. Sensör arızası veya dış etken kaynaklı anlık veri sıçraması. Araç yörüngesinde beklenmedik zıplamalar gözlemlenir.</p>
+                    <!-- Alt Panel: Açıklama ve Olay Günlüğü -->
+                    <div class="sim-bottom-row">
+                        <!-- Sol: Anomali Açıklama Kartı -->
+                        <div class="sim-description glass-card" id="sim-description" style="margin-bottom: 0;">
+                            <div class="card-title"><i class="fa-solid fa-circle-info"></i> <span id="sim-desc-title">Spike Anomalisi</span></div>
+                            <p id="sim-desc-text">Kısa süreli ani yüksek sapma. Sensör arızası veya dış etken kaynaklı anlık veri sıçraması. Araç yörüngesinde beklenmedik zıplamalar gözlemlenir.</p>
+                        </div>
+                        
+                        <!-- Sağ: Simülasyon Olay Günlüğü -->
+                        <div class="sim-event-log glass-card">
+                            <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <span><i class="fa-solid fa-terminal"></i> Simülasyon Analiz Günlüğü (MATLAB-Style)</span>
+                                <button class="btn-clear-sim-logs" id="btn-clear-sim-logs" style="font-size: 11px;"><i class="fa-solid fa-trash-can"></i> Temizle</button>
+                            </div>
+                            <div class="sim-log-output" id="sim-log-output">
+                                <div class="slog-row info">&gt;&gt; Simülasyon motoru hazır. Analiz başlatılması bekleniyor...</div>
+                            </div>
+                        </div>
                     </div>
                 </section>
 

@@ -569,7 +569,25 @@ document.addEventListener('DOMContentLoaded', () => {
         noise:{title:'Noise Anomalisi',text:'Küçük ama sürekli rastgele dalgalanmalar. Elektromanyetik girişim, düşük sinyal-gürültü oranı veya sensör hassasiyeti kaynaklı. Tek başına kritik değildir ama birikimli etki oluşturabilir.'}
     };
 
-    let simState={running:false,paused:false,frame:0,data:null,ref:null,sim:null,frames:[],animId:null,timeChart:null,playbackSpeed:1.0,selectedType:'spike'};
+    let simState={running:false,paused:false,frame:0,data:null,ref:null,sim:null,frames:[],animId:null,timeChart:null,playbackSpeed:1.0,selectedType:'spike',lastAno:false};
+
+    function simLog(msg, type='info') {
+        const out = $('sim-log-output');
+        if(!out) return;
+        const d = document.createElement('div');
+        d.className = `slog-row ${type}`;
+        d.innerHTML = msg;
+        out.appendChild(d);
+        out.scrollTop = out.scrollHeight;
+    }
+
+    const btnClearSim = $('btn-clear-sim-logs');
+    if(btnClearSim) {
+        btnClearSim.addEventListener('click', () => {
+            const out = $('sim-log-output');
+            if(out) out.innerHTML = '<div class="slog-row info">&gt;&gt; Günlük temizlendi.</div>';
+        });
+    }
 
     // Canvas resize
     function simResize(){const wrap=simC.parentElement;if(!wrap)return;simC.width=wrap.clientWidth;simC.height=wrap.clientHeight}
@@ -771,6 +789,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if(simState.timeChart){simState.timeChart.data.labels=[];simState.timeChart.data.datasets[0].data=[];simState.timeChart.data.datasets[1].data=[];simState.timeChart.update()}
         // Clear canvas
         if(simC.width>0&&simC.height>0){sctx.clearRect(0,0,simC.width,simC.height);drawRoad(0,simC.height/2)}
+        const out = $('sim-log-output');
+        if(out) out.innerHTML = '<div class="slog-row info">&gt;&gt; Simülasyon sıfırlandı. Yeni analiz bekleniyor...</div>';
         log('Simülasyon sıfırlandı.');
     });
 
@@ -790,6 +810,13 @@ document.addEventListener('DOMContentLoaded', () => {
         simState.ref=makeReference(data);
         simState.sim=applySeverity(data,simState.ref,severity);
         const tot=simState.sim.x.length;
+        simState.lastAno=false;
+
+        const out = $('sim-log-output');
+        if(out) out.innerHTML = '';
+        simLog(`&gt;&gt; [0.0s] 🚗 Simülasyon başlatıldı. Anomali Modeli: <b>${ANOMALY_NAMES[data.type]}</b> | Şiddet: <b>${severity.toFixed(2)}x</b>`, 'info');
+        simLog(`&gt;&gt; [0.0s] 📊 Kaynak Veri: <b>${data.source==='rcgan'?'RCGAN Sentetik Üretici':'Deterministik Simülasyon Jeneratörü'}</b>`, 'success');
+        simLog(`&gt;&gt; [0.0s] ⏱️ Toplam Zaman Aralığı: <b>${((tot-1)*0.1).toFixed(1)} sn</b> (${tot} adım)`, 'info');
 
         // Setup UI
         $('btn-sim-play').disabled=true;$('btn-sim-play').innerHTML='<i class="fa-solid fa-play"></i> Çalışıyor';
@@ -835,6 +862,27 @@ document.addEventListener('DOMContentLoaded', () => {
         if(simState.timeChart){
             simState.timeChart.data.datasets[1].data[simState.frame]=parseFloat(simState.sim.y[simState.frame].toFixed(3));
             simState.timeChart.update();
+        }
+
+        // Simülasyon Olay Günlüğü Akışı
+        const m = simState.frames[simState.frame];
+        if (m) {
+            const timeStr = (simState.frame * 0.1).toFixed(1) + 's';
+            
+            // Anomali başlangıç/bitiş logları
+            if (m.ano && !simState.lastAno) {
+                simLog(`⚠️ <b>[${timeStr}] ANOMALİ TESPİT EDİLDİ:</b> Sapma: <b>${m.offset.toFixed(2)}m</b> | Risk: <b>%${Math.round(m.risk)}</b> (Sürüş Güvenliği Kaybı)`, 'danger');
+            } else if (!m.ano && simState.lastAno) {
+                simLog(`✅ <b>[${timeStr}] DURUM NORMALLEŞTİ:</b> Araç kararlı yörüngeye döndü (Sapma: ${m.offset.toFixed(2)}m)`, 'success');
+            }
+            
+            // Periyodik durum güncellemesi (her 1.0 saniyede)
+            if (simState.frame % 10 === 0 && simState.frame > 0) {
+                const logType = m.ano ? 'warn' : 'info';
+                simLog(`📊 <b>[${timeStr}] METRİKLER:</b> Hız: <b>${m.sp.toFixed(1)} m/s</b> | Sapma: <b>${m.offset.toFixed(2)}m</b> | Risk: <b>%${Math.round(m.risk)}</b>`, logType);
+            }
+            
+            simState.lastAno = m.ano;
         }
 
         simState.frame++;
@@ -936,6 +984,26 @@ document.addEventListener('DOMContentLoaded', () => {
         $('sk-duration').textContent=(tot*0.1).toFixed(1)+' sn';
         $('sk-risk').textContent=riskLevel;
         $('sk-risk').style.color=avgRisk>60?'var(--red)':avgRisk>35?'var(--amber)':'var(--green)';
+
+        // MATLAB-Style final report logging
+        simLog(`------------------------------------------------------------`, 'info');
+        simLog(`🏁 <b>ANALİZ TAMAMLANDI (MATLAB-Style Summary)</b>`, 'header');
+        simLog(`* Anomali Modeli: <b>${ANOMALY_NAMES[simState.sim.type] || 'Bilinmiyor'}</b>`, 'info');
+        simLog(`* Simülasyon Süresi: <b>${(tot*0.1).toFixed(1)} sn</b> (Etkilenen: <b>${(affected*0.1).toFixed(1)} sn</b>)`, 'info');
+        simLog(`* Ortalama Sapma: <b>${avgOffset.toFixed(3)} m</b> | Maks. Sapma: <b>${maxOffset.toFixed(3)} m</b>`, 'info');
+        simLog(`* Ortalama Risk Skoru: <b>%${Math.round(avgRisk)}</b>`, avgRisk > 35 ? 'warn' : 'info');
+        
+        let decisionStyle = 'color: var(--green);';
+        let decisionClass = 'success';
+        if (avgRisk > 60) {
+            decisionStyle = 'color: var(--red); font-weight: 800; text-decoration: underline;';
+            decisionClass = 'danger';
+        } else if (avgRisk > 35) {
+            decisionStyle = 'color: var(--amber); font-weight: 700;';
+            decisionClass = 'warn';
+        }
+        simLog(`* Risk Kararı Sonucu: <span style="${decisionStyle}">${riskLevel} RİSK</span>`, decisionClass);
+        simLog(`------------------------------------------------------------`, 'info');
 
         log('Sim tamamlandı: '+ANOMALY_NAMES[simState.sim.type]+' | risk='+Math.round(avgRisk)+'/100, maks sapma='+maxOffset.toFixed(2)+' m, etkilenen='+affected+'/'+tot,'ok');
     }
