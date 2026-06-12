@@ -84,7 +84,7 @@ flowchart TD
 ## 🚀 Adım Adım Kurulum Rehberi
 
 > [!WARNING]  
-> **DİKKAT:** Projenin ana omurgasını oluşturan AI modelleri (Örn: 359 MB'lık `checkpoint_epoch_29.pt` ve devasa `.csv` veri setleri) **boyutları çok büyük olduğu için GitHub'a yüklenmemiştir**. Projeyi klonladıktan sonra bu dosyaları manuel olarak indirip ilgili klasörlere koymanız gerekmektedir.
+> **DİKKAT:** Projenin ana omurgasını oluşturan AI modelleri (Örn: 359 MB'lık `checkpoint_epoch_29.pt` ve devasa `.csv` veri setleri) **boyutları çok büyük olduğu için GitHub'a yüklenmemiştir**. Bu dosyaları ve veri setlerini [Google Drive](https://drive.google.com/drive/folders/1pCPDsZV1JTMJplXNOtGetRwPa4FKmfk5?usp=drive_link) üzerinden indirip ilgili klasörlere yerleştirmeniz gerekmektedir.
 
 ### 1. Projeyi İndirme (Clone)
 Terminali açın ve projeyi bilgisayarınıza çekin:
@@ -112,7 +112,11 @@ pip install -r requirements.txt
 ```
 
 ### 4. Gerekli Model Dosyalarını İndirme
-Platformun çalışması için gerekli model dosyalarını (Eğer sizinle paylaşıldıysa Google Drive / OneDrive üzerinden) indirip proje içinde şu dizinlere yerleştirmeniz gerekir:
+Platformun çalışması için gerekli büyük dosyaları (AI modelleri ve referans veri setleri) aşağıdaki bağlantıdan toplu olarak indirebilirsiniz:
+
+🔗 **[Google Drive - Büyük Proje Dosyaları](https://drive.google.com/drive/folders/1pCPDsZV1JTMJplXNOtGetRwPa4FKmfk5?usp=drive_link)**
+
+İndirdiğiniz dosyaları proje içinde tam olarak şu dizinlere yerleştirmeniz gerekir:
 - `rcgan_qt_gui_app_v1/checkpoint_epoch_29.pt` *(Görüntü üretim modeli)*
 - `detector/EDSR_x4.pb` *(Yüksek çözünürlük modeli)*
 - `detector/yolov8n.pt` *(YOLO test modeli)*
