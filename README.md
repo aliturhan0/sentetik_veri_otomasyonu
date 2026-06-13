@@ -111,6 +111,73 @@ Projeyi çalıştırmak için gerekli olan tüm kütüphaneler ana dizindeki `re
 pip install -r requirements.txt
 ```
 
+### 3A. Akıllı Veri Artırımı İçin Ayrı `otonom_env` Ortamı Kurulumu
+Akıllı Veri Artırımı modülü, kendi bağımlılıklarını `akilli_veri_arttirimi/requirements.txt` dosyasından alır. Bu nedenle bu modülü daha düzenli ve izole çalıştırmak için `akilli_veri_arttirimi` klasörünün içine ayrıca `otonom_env` sanal ortamı kurulmalıdır.
+
+macOS/Linux için:
+```bash
+cd akilli_veri_arttirimi
+python3 -m venv otonom_env
+source otonom_env/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+cd ..
+```
+
+Windows için:
+```powershell
+cd akilli_veri_arttirimi
+python -m venv otonom_env
+.\otonom_env\Scripts\activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+cd ..
+```
+
+Kurulumdan sonra ortamın doğru yerde çalıştığını kontrol etmek için:
+```bash
+which python
+python --version
+pip list
+```
+
+macOS/Linux üzerinde `which python` çıktısı şu klasörü göstermelidir:
+```text
+akilli_veri_arttirimi/otonom_env/bin/python
+```
+
+> [!NOTE]
+> `tensorflow`, `torch`, `ctgan`, `scikit-learn` gibi paketler ağır olduğu için kurulum biraz uzun sürebilir. Python 3.14 ile paket uyumluluğu hatası alınırsa Python 3.10, 3.11 veya 3.12 ile aynı adımları tekrar uygulamak önerilir.
+
+### 3B. Ana Klasöre Dönüp `env` Ortamını Yeniden Aktif Etme
+`akilli_veri_arttirimi/otonom_env` kurulumu tamamlandıktan sonra terminal hâlâ Akıllı Veri Artırımı ortamında olabilir. Ana launcher'ı veya proje kökündeki dosyaları çalıştırmadan önce ana klasöre dönüp proje kökündeki `env` ortamını yeniden aktif edin.
+
+macOS/Linux için:
+```bash
+deactivate
+cd /Users/ozcan/sentetik_veri_otomasyonu
+source env/bin/activate
+python main_launcher.py
+```
+
+Windows için:
+```powershell
+deactivate
+cd C:\Users\özcan\sentetik_veri_otomasyonu
+.\env\Scripts\activate
+python main_launcher.py
+```
+
+Aktif ortamı kontrol etmek için:
+```bash
+which python
+```
+
+macOS/Linux üzerinde beklenen çıktı proje kökündeki `env` ortamını göstermelidir:
+```text
+/Users/ozcan/sentetik_veri_otomasyonu/env/bin/python
+```
+
 ### 4. Gerekli Model Dosyalarını İndirme
 Platformun çalışması için gerekli büyük dosyaları (AI modelleri ve referans veri setleri) aşağıdaki bağlantıdan toplu olarak indirebilirsiniz:
 
@@ -312,6 +379,142 @@ adresine gidilebilir.
 
 ---
 
+## macOS'ta Karşılaşılabilecek Hatalar ve Çözümleri
+
+### Yanlış sanal ortam aktif
+
+Görüntü pipeline'ı proje kökündeki `env` ortamıyla, Akıllı Veri Artırımı ise `akilli_veri_arttirimi/otonom_env` ortamıyla çalıştırılmalıdır. Yanlış ortam aktifse paketler kurulu görünse bile uygulama hata verebilir.
+
+Kontrol:
+
+```bash
+which python
+```
+
+Görüntü pipeline'ı ve ana launcher için beklenen yol:
+
+```text
+/Users/ozcan/sentetik_veri_otomasyonu/env/bin/python
+```
+
+Akıllı Veri Artırımı için beklenen yol:
+
+```text
+/Users/ozcan/sentetik_veri_otomasyonu/akilli_veri_arttirimi/otonom_env/bin/python
+```
+
+Ana proje ortamına dönmek için:
+
+```bash
+deactivate
+cd /Users/ozcan/sentetik_veri_otomasyonu
+source env/bin/activate
+```
+
+### `OpenCV dnn_superres` bulunamadı
+
+EDSR upscale için normal `opencv-python` yeterli değildir. `cv2.dnn_superres` desteği `opencv-contrib-python` paketiyle gelir. Mevcut ortamda `opencv-python` ve `opencv-contrib-python` aynı anda kuruluysa çakışma oluşabilir.
+
+Çözüm:
+
+```bash
+cd /Users/ozcan/sentetik_veri_otomasyonu
+source env/bin/activate
+pip uninstall opencv-python opencv-contrib-python opencv-python-headless opencv-contrib-python-headless -y
+pip install --no-cache-dir opencv-contrib-python
+```
+
+Kontrol:
+
+```bash
+python -c "import cv2; print(cv2.__version__); print(hasattr(cv2.dnn_superres, 'DnnSuperResImpl_create'))"
+```
+
+Son satır `True` dönmelidir.
+
+### `No module named 'transformers'`
+
+SegFormer segmentasyon analizi için Hugging Face Transformers paketi gerekir.
+
+Çözüm:
+
+```bash
+cd /Users/ozcan/sentetik_veri_otomasyonu
+source env/bin/activate
+pip install -r requirements.txt
+```
+
+Tek tek kurmak gerekirse:
+
+```bash
+pip install transformers safetensors accelerate
+```
+
+Kontrol:
+
+```bash
+python -c "import transformers; print(transformers.__version__)"
+```
+
+### `ModuleNotFoundError: No module named 'PySide6'`
+
+Ana masaüstü arayüzü için PySide6 eksiktir veya yanlış ortam aktiftir.
+
+Çözüm:
+
+```bash
+cd /Users/ozcan/sentetik_veri_otomasyonu
+source env/bin/activate
+pip install -r requirements.txt
+```
+
+### `EDSR model dosyası bulunamadı`
+
+`detector/EDSR_x4.pb` dosyası eksiktir veya yanlış klasördedir.
+
+Çözüm:
+
+- `EDSR_x4.pb` dosyasını `detector` klasörüne koyun.
+- Arayüzde detector klasörünün doğru seçildiğini kontrol edin.
+
+### SegFormer ilk çalıştırmada model indiremiyor
+
+SegFormer modeli ilk çalıştırmada Hugging Face üzerinden indirilebilir. İnternet yoksa veya model cache'te bulunmuyorsa hata alınabilir.
+
+Çözüm:
+
+- İnternet bağlantısını kontrol edin.
+- Modelin daha önce indirilmiş olduğundan emin olun.
+- Kurumsal ağ/proxy kullanılıyorsa Hugging Face erişimini kontrol edin.
+
+### Python sürümü uyumluluk hatası
+
+`tensorflow`, `torch`, `opencv-contrib-python` veya `ctgan` kurulurken Python sürümünden kaynaklı hata alınabilir.
+
+Çözüm:
+
+- Ana görüntü pipeline'ı için Python 3.10, 3.11 veya 3.12 kullanın.
+- Akıllı Veri Artırımı için de aynı şekilde Python 3.10, 3.11 veya 3.12 ile `otonom_env` ortamını yeniden oluşturun.
+
+### `Port 8000 already in use`
+
+Akıllı Veri Artırımı backend'i için kullanılan `8000` portu başka bir uygulama tarafından kullanılıyor olabilir.
+
+Çözüm:
+
+```bash
+lsof -i :8000
+```
+
+Gerekirse ilgili süreci kapatın veya farklı port kullanın:
+
+```bash
+export SENTETIK_PORT=8001
+python akilli_veri_arttirimi/backend/server.py
+```
+
+---
+
 ## Windows'ta Karşılaşılabilecek Hatalar ve Çözümleri
 
 ### `ModuleNotFoundError: No module named 'PySide6'`
@@ -341,8 +544,14 @@ EDSR upscale için normal `opencv-python` yeterli değildir. `cv2.dnn_superres` 
 Çözüm:
 
 ```powershell
-pip uninstall opencv-python -y
-pip install opencv-contrib-python
+pip uninstall opencv-python opencv-contrib-python opencv-python-headless opencv-contrib-python-headless -y
+pip install --no-cache-dir opencv-contrib-python
+```
+
+Kontrol:
+
+```powershell
+python -c "import cv2; print(cv2.__version__); print(hasattr(cv2.dnn_superres, 'DnnSuperResImpl_create'))"
 ```
 
 ### `EDSR model dosyası bulunamadı`

@@ -245,6 +245,70 @@ source otonom_env/bin/activate  # macOS/Linux
 pip install torch fastapi uvicorn pandas numpy scikit-learn scipy ctgan
 ```
 
+### Ana Proje İçinde `otonom_env` Kurulumu
+Bu modül `sentetik_veri_otomasyonu` ana projesinin içinde kullanılacaksa, sanal ortamın doğrudan `akilli_veri_arttirimi` klasörünün içine kurulması önerilir. Böylece veri artırımı arayüzü kendi bağımlılıklarını `akilli_veri_arttirimi/requirements.txt` üzerinden ayrı şekilde yönetir.
+
+macOS/Linux için:
+```bash
+cd /Users/ozcan/sentetik_veri_otomasyonu/akilli_veri_arttirimi
+python3 -m venv otonom_env
+source otonom_env/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Windows için:
+```powershell
+cd akilli_veri_arttirimi
+python -m venv otonom_env
+.\otonom_env\Scripts\activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Ortamın doğru aktif olduğunu kontrol etmek için:
+```bash
+which python
+python --version
+pip list
+```
+
+macOS/Linux üzerinde beklenen Python yolu:
+```text
+/Users/ozcan/sentetik_veri_otomasyonu/akilli_veri_arttirimi/otonom_env/bin/python
+```
+
+> Not: Bu klasörde eski veya bozuk bir ortam varsa yeni ortamı `otonom_env` adıyla kurun. `tensorflow`, `torch` veya `ctgan` kurulumu sırasında Python sürümü kaynaklı hata alınırsa Python 3.10, 3.11 veya 3.12 kullanarak ortamı yeniden oluşturun.
+
+### Ana Proje Ortamına Geri Dönme
+`otonom_env` kurulumu bittikten sonra ana launcher veya proje kökündeki komutlar çalıştırılacaksa, önce bu ortamdan çıkıp ana projenin `env` ortamı tekrar aktif edilmelidir.
+
+macOS/Linux için:
+```bash
+deactivate
+cd /Users/ozcan/sentetik_veri_otomasyonu
+source env/bin/activate
+python main_launcher.py
+```
+
+Windows için:
+```powershell
+deactivate
+cd C:\Users\özcan\sentetik_veri_otomasyonu
+.\env\Scripts\activate
+python main_launcher.py
+```
+
+Aktif Python yolunu kontrol etmek için:
+```bash
+which python
+```
+
+macOS/Linux üzerinde beklenen yol:
+```text
+/Users/ozcan/sentetik_veri_otomasyonu/env/bin/python
+```
+
 ### Çalıştırma
 ```bash
 # Sunucuyu başlat
