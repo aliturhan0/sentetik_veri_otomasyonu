@@ -694,5 +694,7 @@ Waymo Motion Dataset, Google'ın otonom araç projesi Waymo'dan elde edilen ger�
 
 > Sun, P., et al. (2020). *Scalability in Perception for Autonomous Driving: Waymo Open Dataset.* CVPR 2020.
 
+## 📚 Kullanılan Açık Veri Seti: https://www.kaggle.com/datasets/mitanshuchakrawarty/nuscenes
+
 ---
 **Geliştiriciler:** Ali Turhan & Özcan Yıldıral | Modern AI Araştırma Laboratuvarı Mimarisi
