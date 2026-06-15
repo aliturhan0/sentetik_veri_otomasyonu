@@ -674,4 +674,25 @@ Bazı eski kütüphaneler Windows yolunda Türkçe karakter olduğunda dosya oku
 - Çok uzun veya özel karakterli ek klasör yollarından kaçının.
 
 ---
+
+## 📚 Kullanılan Açık Veri Seti: Waymo Open Dataset
+
+Bu projede **Akıllı Veri Artırımı** modülünün temelini oluşturan RCGAN GODMODE modeli, [Waymo Open Dataset](https://waymo.com/open/download/) içerisindeki **Motion Dataset** bölümü kullanılarak eğitilmiştir.
+
+### Neden Waymo Motion Dataset?
+Waymo Motion Dataset, Google'ın otonom araç projesi Waymo'dan elde edilen gerçek dünya sürüş verilerini içerir. Bu veri setinde:
+* Otonom araçların **x, y, z koordinatları**, **hız**, **yaw açısı** ve **ivme** gibi zaman serisi verileri bulunur
+* Gerçek trafik senaryolarındaki araç yörüngeleri, şerit değişimleri ve manevra verileri mevcuttur
+* Corner case (nadir ve tehlikeli durum) senaryoları doğal olarak içerilmektedir
+
+### Projede Ne İçin Kullanıldı?
+1. **Model Eğitimi:** `waymo_rcgan_GODMODE_V2_PHYSICS_AWARE.pth` modeli bu veri seti üzerinde eğitilmiştir. Model, gerçek araç hareketlerini öğrenerek fiziksel olarak tutarlı sentetik yörünge verileri üretir.
+2. **Seed (Tohum) Verisi:** `waymo_seed_MASSIVE.csv` dosyası, Waymo Motion Dataset'ten çıkarılmış 20 adımlık pencere formatındaki yörünge verileridir. RCGAN bu veriyi referans alarak yeni sentetik yörüngeler üretir.
+3. **Format Standardı:** Kullanıcının yüklediği CSV verileri otomatik olarak Waymo formatına dönüştürülerek RCGAN ile üretim yapılabilir.
+
+🔗 **[Waymo Open Dataset - Motion Dataset İndirme Sayfası](https://waymo.com/open/download/)**
+
+> Sun, P., et al. (2020). *Scalability in Perception for Autonomous Driving: Waymo Open Dataset.* CVPR 2020.
+
+---
 **Geliştiriciler:** Ali Turhan & Özcan Yıldıral | Modern AI Araştırma Laboratuvarı Mimarisi
