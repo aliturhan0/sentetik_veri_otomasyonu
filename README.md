@@ -155,7 +155,7 @@ akilli_veri_arttirimi/otonom_env/bin/python
 macOS/Linux için:
 ```bash
 deactivate
-cd /Users/ozcan/sentetik_veri_otomasyonu
+cd sentetik_veri_otomasyonu
 source env/bin/activate
 python main_launcher.py
 ```
@@ -163,7 +163,7 @@ python main_launcher.py
 Windows için:
 ```powershell
 deactivate
-cd C:\Users\özcan\sentetik_veri_otomasyonu
+cd sentetik_veri_otomasyonu
 .\env\Scripts\activate
 python main_launcher.py
 ```
