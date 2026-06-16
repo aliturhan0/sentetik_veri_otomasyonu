@@ -903,27 +903,49 @@ document.addEventListener('DOMContentLoaded', () => {
         if(m.ano){sctx.fillStyle=ac+'10';sctx.fillRect(0,0,w,simC.height)}
 
         // Compute visible trail
-        const scale=24,step=Math.max(6,Math.min(24,w/(tot+10)));
+        const scale=24;
+        const step=(w*0.76)/(tot-1||1);
         const sx=w*.12;
-        const trailLen=Math.min(f+1,25);
-        const refTrail=[],trail=[];
-        for(let i=Math.max(0,f-trailLen+1);i<=f;i++){
-            refTrail.push({x:sx+i*step,y:mid+(ref.y[i]-ref.y[0])*scale});
+        
+        // Full planned reference trajectory
+        const refTrailFull=[];
+        for(let i=0;i<tot;i++){
+            refTrailFull.push({x:sx+i*step,y:mid+(ref.y[i]-ref.y[0])*scale});
+        }
+        
+        // Progress reference trajectory up to current frame
+        const refTrailProgress=[];
+        for(let i=0;i<=f;i++){
+            refTrailProgress.push({x:sx+i*step,y:mid+(ref.y[i]-ref.y[0])*scale});
+        }
+        
+        // Actual simulated trajectory up to current frame
+        const trail=[];
+        for(let i=0;i<=f;i++){
             trail.push({x:sx+i*step,y:mid+(sim.y[i]-ref.y[0])*scale});
         }
 
-        // Draw trails
-        drawPath(refTrail,'rgba(16,185,129,.45)',2,true);
+        // Draw planned guideline (very subtle dashed green)
+        drawPath(refTrailFull,'rgba(16,185,129,.15)',1.5,true);
+        
+        // Draw reference history (solid green)
+        drawPath(refTrailProgress,'rgba(16,185,129,.55)',2,false);
+        
+        // Draw actual simulation path (solid color based on anomaly)
         drawPath(trail,ac+'cc',3,false);
 
-        // Trail dots
-        for(let i=0;i<trail.length;i+=3){
-            sctx.fillStyle=ac+Math.round(35+i*9).toString(16).padStart(2,'0');
+        // Fading trail dots right behind the active vehicle
+        const dotStart=Math.max(0,trail.length-30);
+        for(let i=dotStart;i<trail.length;i+=3){
+            const ratio=(i-dotStart)/(trail.length-dotStart||1);
+            const opacity=Math.round(35+ratio*220);
+            sctx.fillStyle=ac+opacity.toString(16).padStart(2,'0');
             sctx.beginPath();sctx.arc(trail[i].x,trail[i].y,3,0,Math.PI*2);sctx.fill();
         }
 
         // Cars
-        const refPt=refTrail[refTrail.length-1],simPt=trail[trail.length-1];
+        const refPt={x:sx+f*step,y:mid+(ref.y[f]-ref.y[0])*scale};
+        const simPt=trail[trail.length-1];
         const ag=Math.atan2(sim.vy[f],sim.vx[f]+1e-8),rag=Math.atan2(ref.vy[f],ref.vx[f]+1e-8);
         drawCar(refPt.x,refPt.y,rag,'#10b981',true);
         drawCar(simPt.x,simPt.y,ag,ac,false);
