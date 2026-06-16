@@ -970,9 +970,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const affected=frames.filter(m=>m.ano).length;
         const anoTime=affected*0.1;
         const avgRisk=frames.reduce((a,m)=>a+m.risk,0)/tot;
+        const maxRisk=Math.max(...frames.map(m=>m.risk),0);
+        const affectedRatio=tot>0?(affected/tot):0;
         const lossRate=simState.sim.type==='dropout'?(affected/tot*100).toFixed(1)+'%':'0.0%';
         const severity=parseFloat($('sim-severity').value);
-        const riskLevel=avgRisk>60?'KRİTİK':avgRisk>35?'ORTA':'DÜŞÜK';
+        
+        let riskLevel='DÜŞÜK';
+        let isDowngraded=false;
+        if (maxRisk > 60) {
+            // Eğer tepe risk skoru kritik seviyede ama süresi kısaysa (2.5 saniyeden kısa veya simülasyonun %30'undan azsa) ORTA risk yap
+            if (anoTime < 2.5 || affectedRatio < 0.3) {
+                riskLevel = 'ORTA';
+                isDowngraded = true;
+            } else {
+                riskLevel = 'KRİTİK';
+            }
+        } else if (maxRisk > 35 || avgRisk > 20) {
+            riskLevel = 'ORTA';
+        }
 
         // Update KPI cards
         $('sk-type').textContent=ANOMALY_NAMES[simState.sim.type]||'—';
@@ -983,7 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
         $('sk-loss').textContent=lossRate;
         $('sk-duration').textContent=(tot*0.1).toFixed(1)+' sn';
         $('sk-risk').textContent=riskLevel;
-        $('sk-risk').style.color=avgRisk>60?'var(--red)':avgRisk>35?'var(--amber)':'var(--green)';
+        $('sk-risk').style.color=riskLevel==='KRİTİK'?'var(--red)':riskLevel==='ORTA'?'var(--amber)':'var(--green)';
 
         // MATLAB-Style final report logging
         simLog(`------------------------------------------------------------`, 'info');
@@ -991,21 +1006,26 @@ document.addEventListener('DOMContentLoaded', () => {
         simLog(`* Anomali Modeli: <b>${ANOMALY_NAMES[simState.sim.type] || 'Bilinmiyor'}</b>`, 'info');
         simLog(`* Simülasyon Süresi: <b>${(tot*0.1).toFixed(1)} sn</b> (Etkilenen: <b>${(affected*0.1).toFixed(1)} sn</b>)`, 'info');
         simLog(`* Ortalama Sapma: <b>${avgOffset.toFixed(3)} m</b> | Maks. Sapma: <b>${maxOffset.toFixed(3)} m</b>`, 'info');
+        simLog(`* Maksimum (Tepe) Risk Skoru: <b>%${Math.round(maxRisk)}</b>`, maxRisk > 60 ? 'danger' : maxRisk > 35 ? 'warn' : 'info');
         simLog(`* Ortalama Risk Skoru: <b>%${Math.round(avgRisk)}</b>`, avgRisk > 35 ? 'warn' : 'info');
         
+        if (isDowngraded) {
+            simLog(`* <i>Bilgi: Tepe risk kritik seviyede (%${Math.round(maxRisk)}) olsa da, anomali süresi kısa olduğu için (${anoTime.toFixed(1)} sn) genel seviye <b>ORTA RİSK</b> olarak güncellenmiştir.</i>`, 'warn');
+        }
+
         let decisionStyle = 'color: var(--green);';
         let decisionClass = 'success';
-        if (avgRisk > 60) {
+        if (riskLevel === 'KRİTİK') {
             decisionStyle = 'color: var(--red); font-weight: 800; text-decoration: underline;';
             decisionClass = 'danger';
-        } else if (avgRisk > 35) {
+        } else if (riskLevel === 'ORTA') {
             decisionStyle = 'color: var(--amber); font-weight: 700;';
             decisionClass = 'warn';
         }
         simLog(`* Risk Kararı Sonucu: <span style="${decisionStyle}">${riskLevel} RİSK</span>`, decisionClass);
         simLog(`------------------------------------------------------------`, 'info');
 
-        log('Sim tamamlandı: '+ANOMALY_NAMES[simState.sim.type]+' | risk='+Math.round(avgRisk)+'/100, maks sapma='+maxOffset.toFixed(2)+' m, etkilenen='+affected+'/'+tot,'ok');
+        log('Sim tamamlandı: '+ANOMALY_NAMES[simState.sim.type]+' | risk='+riskLevel+' (maks='+Math.round(maxRisk)+', ort='+Math.round(avgRisk)+'), maks sapma='+maxOffset.toFixed(2)+' m, etkilenen='+affected+'/'+tot,'ok');
     }
 
     // === AUTOMATION ===
