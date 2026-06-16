@@ -136,6 +136,36 @@ source env/bin/activate
 python main_launcher.py
 ```
 
+Kurulumdan sonra hızlı doğrulama yapmak için:
+```bash
+source env/bin/activate
+python --version
+python - <<'PY'
+import platform
+import PySide6
+import torch
+import pandas
+import cv2
+from six.moves import _thread
+
+print("arch:", platform.machine())
+print("mps:", torch.backends.mps.is_available())
+print("torch:", torch.__version__)
+print("pandas:", pandas.__version__)
+print("PySide6:", PySide6.__version__)
+print("cv2:", cv2.__version__)
+print("dnn_superres:", hasattr(cv2.dnn_superres, "DnnSuperResImpl_create"))
+PY
+```
+
+Beklenen kritik degerler:
+```text
+Python 3.12.x
+arch: arm64
+mps: True
+dnn_superres: True
+```
+
 ### 2. Sanal Ortam (Virtual Environment) Kurulumu
 Bilgisayarınızdaki diğer projelerle kütüphanelerin çakışmaması için boş bir ortam oluşturun:
 ```bash
@@ -462,7 +492,7 @@ source env/bin/activate
 
 ### `OpenCV dnn_superres` bulunamadı
 
-EDSR upscale için normal `opencv-python` yeterli değildir. `cv2.dnn_superres` desteği `opencv-contrib-python` paketiyle gelir. Mevcut ortamda `opencv-python` ve `opencv-contrib-python` aynı anda kuruluysa çakışma oluşabilir.
+EDSR upscale için `cv2.dnn_superres` desteği gerekir ve bu destek `opencv-contrib-python` paketiyle gelir. YOLO/Ultralytics tarafı ise bağımlılık kontrolünde `opencv-python` paketini bekler. Bu nedenle iki paket aynı sürümde kurulmalı ve `opencv-contrib-python` en son kurulmalıdır.
 
 Çözüm:
 
@@ -470,7 +500,8 @@ EDSR upscale için normal `opencv-python` yeterli değildir. `cv2.dnn_superres` 
 cd /Users/ozcan/sentetik_veri_otomasyonu
 source env/bin/activate
 pip uninstall opencv-python opencv-contrib-python opencv-python-headless opencv-contrib-python-headless -y
-pip install --no-cache-dir opencv-contrib-python
+pip install opencv-python==4.13.0.92
+pip install opencv-contrib-python==4.13.0.92
 ```
 
 Kontrol:

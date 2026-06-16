@@ -1,3 +1,5 @@
+# Python: 3.12.7
+# Bu dosya, bu makinede calisan Akilli Veri Artirimi ortamina gore sabitlendi.
 absl-py==2.4.0
 annotated-doc==0.0.4
 annotated-types==0.7.0
@@ -42,7 +44,7 @@ packaging==26.2
 pandas==2.3.3
 pillow==12.2.0
 protobuf==7.34.1
-proxy-tools==0.1.0
+proxy_tools==0.1.0
 pydantic==2.13.4
 pydantic_core==2.46.4
 Pygments==2.20.0
@@ -70,8 +72,8 @@ termcolor==3.3.0
 threadpoolctl==3.6.0
 torch==2.11.0
 tqdm==4.67.3
-typing-inspection==0.4.2
 typing_extensions==4.15.0
+typing-inspection==0.4.2
 tzdata==2026.2
 urllib3==2.6.3
 uvicorn==0.47.0
