@@ -588,7 +588,8 @@ YOLO paketi kurulu değildir.
 Çözüm:
 
 ```powershell
-pip install ultralytics
+pip uninstall -y ultralytics
+pip install ultralytics==8.4.48
 ```
 
 ### `No module named 'transformers'`
