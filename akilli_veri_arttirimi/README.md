@@ -306,7 +306,7 @@ which python
 
 macOS/Linux üzerinde beklenen yol:
 ```text
-/Users/ozcan/sentetik_veri_otomasyonu/env/bin/python
+<proje_dizini>/env/bin/python
 ```
 
 ### Çalıştırma

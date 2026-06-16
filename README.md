@@ -412,7 +412,7 @@ Bu dosyalar Git LFS ile takip edilir. Repo ilk kez indirildikten sonra `git lfs 
 Proje kök dizinine dönüp görüntü ortamını aktif edin:
 
 ```powershell
-cd C:\Users\özcan\sentetik_veri_otomasyonu
+cd <proje_dizini>
 .\.venv311\Scripts\activate
 python main_launcher.py
 ```
@@ -460,6 +460,9 @@ adresine gidilebilir.
 
 ## macOS'ta Karşılaşılabilecek Hatalar ve Çözümleri
 
+> [!NOTE]  
+> Aşağıdaki çözümlerde geçen `<proje_dizini>` ifadesi, projenin bilgisayarınızdaki kurulu olduğu ana klasör yolunu (Örn: `/Users/aliturhan/Projects/sonproje` veya `C:\Projeler\sentetik_veri_otomasyonu`) temsil etmektedir. Komutları çalıştırırken kendi yolunuzu yazmalısınız.
+
 ### Yanlış sanal ortam aktif
 
 Görüntü pipeline'ı proje kökündeki `env` ortamıyla, Akıllı Veri Artırımı ise `akilli_veri_arttirimi/otonom_env` ortamıyla çalıştırılmalıdır. Yanlış ortam aktifse paketler kurulu görünse bile uygulama hata verebilir.
@@ -473,20 +476,20 @@ which python
 Görüntü pipeline'ı ve ana launcher için beklenen yol:
 
 ```text
-/Users/ozcan/sentetik_veri_otomasyonu/env/bin/python
+<proje_dizini>/env/bin/python
 ```
 
 Akıllı Veri Artırımı için beklenen yol:
 
 ```text
-/Users/ozcan/sentetik_veri_otomasyonu/akilli_veri_arttirimi/otonom_env/bin/python
+<proje_dizini>/akilli_veri_arttirimi/otonom_env/bin/python
 ```
 
 Ana proje ortamına dönmek için:
 
 ```bash
 deactivate
-cd /Users/ozcan/sentetik_veri_otomasyonu
+cd <proje_dizini>
 source env/bin/activate
 ```
 
@@ -497,7 +500,7 @@ EDSR upscale için `cv2.dnn_superres` desteği gerekir ve bu destek `opencv-cont
 Çözüm:
 
 ```bash
-cd /Users/ozcan/sentetik_veri_otomasyonu
+cd <proje_dizini>
 source env/bin/activate
 pip uninstall opencv-python opencv-contrib-python opencv-python-headless opencv-contrib-python-headless -y
 pip install opencv-python==4.13.0.92
@@ -519,7 +522,7 @@ SegFormer segmentasyon analizi için Hugging Face Transformers paketi gerekir.
 Çözüm:
 
 ```bash
-cd /Users/ozcan/sentetik_veri_otomasyonu
+cd <proje_dizini>
 source env/bin/activate
 pip install -r requirements.txt
 ```
@@ -543,7 +546,7 @@ Ana masaüstü arayüzü için PySide6 eksiktir veya yanlış ortam aktiftir.
 Çözüm:
 
 ```bash
-cd /Users/ozcan/sentetik_veri_otomasyonu
+cd <proje_dizini>
 source env/bin/activate
 pip install -r requirements.txt
 ```
@@ -593,9 +596,25 @@ export SENTETIK_PORT=8001
 python akilli_veri_arttirimi/backend/server.py
 ```
 
+### `There was an error parsing the body` (FastAPI Gövde Ayrıştırma Hatası)
+
+Akıllı Veri Artırımı kısmında CSV yükleyip Sentezi Başlat dediğinizde arayüzde veya loglarda bu hata beliriyorsa, bunun nedeni FastAPI'nin dosya yükleme isteklerini (`multipart/form-data`) ayrıştıramamasıdır.
+
+**Çözüm:**
+1. Doğru sanal ortamın (`otonom_env`) aktif olduğundan emin olun.
+2. Çakışma yaratan veya eksik yüklenen paketleri temizlemek için terminalde şu komutları sırasıyla çalıştırın:
+   ```bash
+   source akilli_veri_arttirimi/otonom_env/bin/activate
+   pip uninstall multipart python-multipart -y
+   pip install python-multipart
+   ```
+
 ---
 
 ## Windows'ta Karşılaşılabilecek Hatalar ve Çözümleri
+
+> [!NOTE]  
+> Aşağıdaki çözümlerde geçen `<proje_dizini>` ifadesi, projenin bilgisayarınızdaki kurulu olduğu ana klasör yolunu (Örn: `/Users/aliturhan/Projects/sonproje` veya `C:\Projeler\sentetik_veri_otomasyonu`) temsil etmektedir. Komutları çalıştırırken kendi yolunuzu yazmalısınız.
 
 ### `ModuleNotFoundError: No module named 'PySide6'`
 
@@ -753,6 +772,19 @@ Bazı eski kütüphaneler Windows yolunda Türkçe karakter olduğunda dosya oku
 - Model dosyalarının gerçekten var olduğunu kontrol edin.
 - Dosyayı proje içindeki beklenen klasöre kopyalayın.
 - Çok uzun veya özel karakterli ek klasör yollarından kaçının.
+
+### `There was an error parsing the body` (FastAPI Gövde Ayrıştırma Hatası)
+
+Akıllı Veri Artırımı kısmında CSV yükleyip Sentezi Başlat dediğinizde arayüzde veya loglarda bu hata beliriyorsa, bunun nedeni FastAPI'nin dosya yükleme isteklerini (`multipart/form-data`) ayrıştıramamasıdır.
+
+**Çözüm:**
+1. Doğru sanal ortamın (`otonom_env`) aktif olduğundan emin olun.
+2. Çakışma yaratan veya eksik yüklenen paketleri temizlemek için PowerShell'de şu komutları sırasıyla çalıştırın:
+   ```powershell
+   .\akilli_veri_arttirimi\otonom_env\Scripts\activate
+   pip uninstall multipart python-multipart -y
+   pip install python-multipart
+   ```
 
 ---
 
