@@ -41,6 +41,10 @@ ENV/
 *.h5
 *.onnx
 *.weights
+!rcgan_qt_gui_app_v1/checkpoint_epoch_29.pt
+!detector/EDSR_x4.pb
+!detector/yolov8n.pt
+!akilli_veri_arttirimi/waymo_rcgan_GODMODE_V2_PHYSICS_AWARE.pth
 
 # Outputs & Results
 outputs/
@@ -62,3 +66,4 @@ robustness_dataset/clean/
 *.log
 push.log
 *.csv
+!akilli_veri_arttirimi/waymo_seed_MASSIVE.csv
