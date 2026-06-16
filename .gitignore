@@ -48,6 +48,8 @@ ENV/
 
 # Outputs & Results
 outputs/
+!akilli_veri_arttirimi/outputs/
+!akilli_veri_arttirimi/outputs/.gitkeep
 results/
 yolo_visual_failure_outputs/
 segmentation_outputs/
