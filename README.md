@@ -84,13 +84,56 @@ flowchart TD
 ## 🚀 Adım Adım Kurulum Rehberi
 
 > [!WARNING]  
-> **DİKKAT:** Projenin ana omurgasını oluşturan AI modelleri (Örn: 359 MB'lık `checkpoint_epoch_29.pt` ve devasa `.csv` veri setleri) **boyutları çok büyük olduğu için GitHub'a yüklenmemiştir**. Bu dosyaları ve veri setlerini [Google Drive](https://drive.google.com/drive/folders/1pCPDsZV1JTMJplXNOtGetRwPa4FKmfk5?usp=drive_link) üzerinden indirip ilgili klasörlere yerleştirmeniz gerekmektedir.
+> **DİKKAT:** Projenin ana omurgasını oluşturan AI modelleri ve büyük veri dosyaları Git LFS ile tutulur. Projeyi ilk kez indiren kullanıcılar kurulumdan önce `git lfs pull` çalıştırmalıdır.
 
 ### 1. Projeyi İndirme (Clone)
 Terminali açın ve projeyi bilgisayarınıza çekin:
 ```bash
 git clone https://github.com/aliturhan0/sentetik_veri_otomasyonu.git
 cd sentetik_veri_otomasyonu
+```
+
+### 1A. Git LFS Model ve Veri Dosyalarını Alma
+Bu projede büyük model/veri dosyaları Git LFS ile gelir. Projeyi sıfırdan indirdikten sonra ortam kurulumuna geçmeden önce:
+```bash
+git lfs install
+git lfs pull
+```
+
+Bu komutlar aşağıdaki dosyaları gerçek içerikleriyle indirir:
+- `rcgan_qt_gui_app_v1/checkpoint_epoch_29.pt` *(RCGAN görüntü üretimi)*
+- `detector/EDSR_x4.pb` *(EDSR upscale)*
+- `detector/yolov8n.pt` *(YOLO değerlendirmesi)*
+- `akilli_veri_arttirimi/waymo_rcgan_GODMODE_V2_PHYSICS_AWARE.pth` *(Akıllı veri artırımı RCGAN modeli)*
+- `akilli_veri_arttirimi/waymo_seed_MASSIVE.csv` *(Waymo/yörünge seed verisi)*
+
+Kontrol etmek için:
+```bash
+git lfs ls-files
+ls -lh rcgan_qt_gui_app_v1/checkpoint_epoch_29.pt detector/EDSR_x4.pb detector/yolov8n.pt
+ls -lh akilli_veri_arttirimi/waymo_rcgan_GODMODE_V2_PHYSICS_AWARE.pth akilli_veri_arttirimi/waymo_seed_MASSIVE.csv
+```
+
+> [!NOTE]
+> Git LFS yüklü değilse macOS üzerinde `brew install git-lfs` komutuyla kurulabilir. Git LFS dosyaları indirilemezse alternatif olarak büyük dosyalar [Google Drive](https://drive.google.com/drive/folders/1pCPDsZV1JTMJplXNOtGetRwPa4FKmfk5?usp=drive_link) üzerinden indirilip aynı klasörlere elle yerleştirilebilir.
+
+### 1B. macOS Otomatik Kurulum
+macOS üzerinde ana görüntü pipeline ortamını ve Akıllı Veri Artırımı ortamını tek komutla kurmak için:
+```bash
+./scripts/setup_macos.sh
+```
+
+Script şu işlemleri otomatik yapar:
+- Python 3.10, 3.11 veya 3.12 seçer; Python 3.14 kullanmaz.
+- Proje kökünde `env` sanal ortamını kurar ve ana `requirements.txt` dosyasını yükler.
+- Launcher uyumluluğu için `.venv311 -> env` bağlantısını oluşturur.
+- `akilli_veri_arttirimi/otonom_env` ortamını kurar ve `akilli_veri_arttirimi/requirements.txt` dosyasını yükler.
+- YOLO, OpenCV dnn_superres, PySide6, SegFormer/Transformers ve Akıllı Veri Artırımı paketlerini kontrol eder.
+
+Kurulumdan sonra ana launcher'ı açmak için:
+```bash
+source env/bin/activate
+python main_launcher.py
 ```
 
 ### 2. Sanal Ortam (Virtual Environment) Kurulumu
@@ -178,17 +221,23 @@ macOS/Linux üzerinde beklenen çıktı proje kökündeki `env` ortamını göst
 /Users/ozcan/sentetik_veri_otomasyonu/env/bin/python
 ```
 
-### 4. Gerekli Model Dosyalarını İndirme
-Platformun çalışması için gerekli büyük dosyaları (AI modelleri ve referans veri setleri) aşağıdaki bağlantıdan toplu olarak indirebilirsiniz:
+### 4. Gerekli Model Dosyalarını Kontrol Etme
+Platformun çalışması için gerekli büyük dosyalar Git LFS ile indirilmelidir:
 
-🔗 **[Google Drive - Büyük Proje Dosyaları](https://drive.google.com/drive/folders/1pCPDsZV1JTMJplXNOtGetRwPa4FKmfk5?usp=drive_link)**
+```bash
+git lfs pull
+```
 
-İndirdiğiniz dosyaları proje içinde tam olarak şu dizinlere yerleştirmeniz gerekir:
+Bu dosyaların proje içinde tam olarak şu konumlarda bulunması gerekir:
 - `rcgan_qt_gui_app_v1/checkpoint_epoch_29.pt` *(Görüntü üretim modeli)*
 - `detector/EDSR_x4.pb` *(Yüksek çözünürlük modeli)*
 - `detector/yolov8n.pt` *(YOLO test modeli)*
 - `akilli_veri_arttirimi/waymo_rcgan_GODMODE_V2_PHYSICS_AWARE.pth` *(Yörünge/Veri üretim modeli)*
 - `akilli_veri_arttirimi/waymo_seed_MASSIVE.csv` *(Veri artırımı referans veri seti)*
+
+Git LFS kullanılamıyorsa alternatif olarak dosyalar aşağıdaki klasörden indirilebilir ve aynı konumlara elle yerleştirilebilir:
+
+🔗 **[Google Drive - Büyük Proje Dosyaları](https://drive.google.com/drive/folders/1pCPDsZV1JTMJplXNOtGetRwPa4FKmfk5?usp=drive_link)**
 
 ---
 
@@ -318,7 +367,7 @@ Bu paketler `akilli_veri_arttirimi/requirements.txt` içinde bulunmaktadır. Ana
 
 ### 4. Gerekli Model ve Veri Dosyaları
 
-GitHub'a büyük model ve veri dosyaları yüklenmemiş olabilir. Aşağıdaki dosyalar ilgili klasörlerde bulunmalıdır:
+Bu dosyalar Git LFS ile takip edilir. Repo ilk kez indirildikten sonra `git lfs pull` çalıştırılmış olmalıdır. Aşağıdaki dosyalar ilgili klasörlerde bulunmalıdır:
 
 | Dosya | Gerekli olduğu yer |
 |---|---|

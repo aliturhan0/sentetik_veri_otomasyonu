@@ -7,6 +7,11 @@ import tempfile
 import traceback
 from pathlib import Path
 
+# PySide6/Shiboken installs an import hook for Qt feature detection. On some
+# macOS environments that hook can trip over six.moves while pandas imports
+# python-dateutil late in the pipeline, so preload this tiny dependency first.
+from six.moves import _thread  # noqa: F401
+
 from PIL import Image, ImageOps
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize
 from PySide6.QtGui import QPixmap
