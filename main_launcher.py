@@ -23,11 +23,20 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 IMAGE_APP_DIR = PROJECT_ROOT / "rcgan_qt_gui_app_v1"
 IMAGE_APP_SCRIPT = IMAGE_APP_DIR / "qt_gui_app_updated.py"
 IMAGE_APP_LOG = IMAGE_APP_DIR / "image_runtime.log"
-IMAGE_APP_VENV = PROJECT_ROOT / ".venv311"
+
+def detect_venv():
+    if (PROJECT_ROOT / "env").exists():
+        return PROJECT_ROOT / "env"
+    elif (PROJECT_ROOT / ".venv311").exists():
+        return PROJECT_ROOT / ".venv311"
+    return PROJECT_ROOT / "env"
+
+VENV_DIR = detect_venv()
+IMAGE_APP_VENV = VENV_DIR
 
 DATA_APP_DIR = PROJECT_ROOT / "akilli_veri_arttirimi"
 DATA_APP_SCRIPT = DATA_APP_DIR / "main.py"
-DATA_APP_VENV = DATA_APP_DIR / "otonom_env"
+DATA_APP_VENV = VENV_DIR
 
 
 class MainLauncher(QWidget):

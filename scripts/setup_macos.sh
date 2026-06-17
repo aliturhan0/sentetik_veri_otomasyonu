@@ -98,7 +98,7 @@ PY
 
 verify_data_env() {
   log "Akilli Veri Artirimi ortami kontrol ediliyor"
-  "$DATA_ENV/bin/python" - <<'PY'
+  "$MAIN_ENV/bin/python" - <<'PY'
 import ctgan
 import fastapi
 import numpy
@@ -129,6 +129,7 @@ log "Secilen Python: $PYTHON_BIN_SELECTED ($(python_version "$PYTHON_BIN_SELECTE
 
 create_or_reuse_venv "$PYTHON_BIN_SELECTED" "$MAIN_ENV"
 install_requirements "$MAIN_ENV" "$ROOT_DIR/requirements.txt"
+install_requirements "$MAIN_ENV" "$DATA_APP_DIR/requirements.txt"
 
 if [[ -e "$IMAGE_ENV_LINK" && ! -L "$IMAGE_ENV_LINK" && "$IMAGE_ENV_LINK" != "$MAIN_ENV" ]]; then
   log ".venv311 zaten var, dokunulmayacak: $IMAGE_ENV_LINK"
@@ -137,9 +138,6 @@ elif [[ ! -e "$IMAGE_ENV_LINK" ]]; then
   ln -s "env" "$IMAGE_ENV_LINK"
 fi
 
-create_or_reuse_venv "$PYTHON_BIN_SELECTED" "$DATA_ENV"
-install_requirements "$DATA_ENV" "$DATA_APP_DIR/requirements.txt"
-
 verify_main_env
 verify_data_env
 
@@ -147,13 +145,10 @@ cat <<EOF
 
 Kurulum tamamlandi.
 
-Ana launcher icin:
+Ana launcher ve her iki modul icin ortak ortam:
   cd "$ROOT_DIR"
   source env/bin/activate
   python main_launcher.py
-
-Akilli Veri Artirimi ortami:
-  $DATA_ENV/bin/python
 
 Not: Python 3.14 yerine Python 3.10, 3.11 veya 3.12 kullanildi.
 EOF

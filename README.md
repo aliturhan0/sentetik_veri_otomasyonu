@@ -271,6 +271,11 @@ Git LFS kullanılamıyorsa alternatif olarak dosyalar aşağıdaki klasörden in
 
 ---
 
+## 🚨 GÜNCELLEME: Tek Ortam (Unified Environment) Geçişi
+> **Önemli Not:** Projede yaşanan paket çakışmaları ve iki farklı sanal ortam (`env` ve `otonom_env`) yönetiminin yarattığı zorlukları kökten çözmek amacıyla, tüm projeyi **tek bir ortak sanal ortam (`env` veya `.venv311`)** üzerinden çalışacak şekilde güncelledik. Yukarıdaki kurulum talimatlarında bahsi geçen ayrı `otonom_env` kurulumlarına artık **gerek yoktur**. Tüm paketler (FastAPI, TensorFlow, YOLO, vb.) ana projenin kök dizinindeki ortak `requirements.txt` dosyasından tek seferde kurularak her iki uygulamanın (Görüntü ve Veri Artırımı) sorunsuz bir şekilde tek noktadan çalışması sağlanmıştır.
+
+---
+
 ## 💻 Kullanım Kılavuzu
 
 Uygulamayı kullanmak son derece basittir. Arayüzler her şeyi sizin için görselleştirir.
