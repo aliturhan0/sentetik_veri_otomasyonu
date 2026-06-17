@@ -23,7 +23,7 @@ huggingface_hub==1.16.1
 tokenizers==0.22.2
 hf-xet==1.5.1
 
-matplotlib==3.11.0
+matplotlib==3.9.0
 numpy==2.4.6
 pandas==2.3.3
 pillow==12.2.0

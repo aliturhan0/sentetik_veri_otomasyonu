@@ -1113,7 +1113,7 @@ class RCGANQtApp(QWidget):
     def _apply_styles(self):
         self.setStyleSheet("""
             QWidget {
-                font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+                font-family: 'SF Pro Display', 'Segoe UI', sans-serif;
                 font-size: 14px;
                 color: #e8ecf4;
                 background: #06080f;
