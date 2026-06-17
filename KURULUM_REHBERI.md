@@ -10,11 +10,15 @@ Bu projenin (TensorFlow, PyTorch, YOLO, PySide6 vb.) en yüksek performansta ve 
 Eğer bilgisayarınızda Python 3.11 kurulu değilse, işletim sisteminize göre aşağıdaki adımları uygulayarak kurabilirsiniz:
 
 **macOS İçin:**
-Terminali açıp Homebrew ile en temiz şekilde kurabilirsiniz:
+Öncelikle eğer bilgisayarınızda **Homebrew** yüklü değilse, Terminal'i açıp şu komutu yapıştırarak Homebrew'u kurun (Bu işlem macOS için program kurmayı çok kolaylaştırır):
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Homebrew kurulduktan sonra (veya zaten yüklüyse), Python 3.11'i en temiz şekilde kurmak için Terminal'e şunu yazın:
 ```bash
 brew install python@3.11
 ```
-*(Eğer Homebrew yoksa [Python'un resmi sitesinden macOS yükleyicisini indirip](https://www.python.org/downloads/release/python-3119/) kurabilirsiniz.)*
 
 **Windows İçin:**
 [Python Resmi İndirme Sayfası (3.11.9)](https://www.python.org/downloads/release/python-3119/) linkine tıklayıp **"Windows installer (64-bit)"** dosyasını indirin. 
