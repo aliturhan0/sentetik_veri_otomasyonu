@@ -4,12 +4,17 @@ Bu rehber, projedeki tüm modüllerin (Görüntü Robustness ve Akıllı Veri Ar
 
 ---
 
-## Adım 1: Projeyi Bilgisayara İndirme (Clone)
-Terminalinizi (veya PowerShell/Command Prompt) açın ve projeyi bilgisayarınıza çekin:
+## Adım 1: Projeyi Bilgisayara İndirme (Clone) veya Güncelleme
+Terminalinizi (veya PowerShell/Command Prompt) açın ve projeyi ilk defa indiriyorsanız bilgisayarınıza çekin:
 
 ```bash
 git clone https://github.com/aliturhan0/sentetik_veri_otomasyonu.git
 cd sentetik_veri_otomasyonu
+```
+
+**Eğer proje zaten bilgisayarınızda mevcutsa, en son güncellemeleri (hata çözümleri vb.) almak için proje klasörü içindeyken şu komutu çalıştırın:**
+```bash
+git pull
 ```
 
 ## Adım 2: Büyük Yapay Zeka Modellerini İndirme (Git LFS)
