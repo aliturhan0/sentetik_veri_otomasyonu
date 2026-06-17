@@ -25,6 +25,18 @@ brew install python@3.12
 > [!IMPORTANT]
 > Kurulumu başlatırken karşınıza çıkan ilk ekranda **"Add python.exe to PATH"** kutucuğunu kesinlikle işaretleyin!
 
+**Python Sürümünü Kontrol Etme:**
+Kurulumun başarılı olup olmadığını ve bilgisayarınızda hangi sürümün aktif olduğunu görmek için Terminal (veya PowerShell) ekranına şunu yazın:
+```bash
+python3 --version
+```
+*(Windows için `python --version` şeklinde de yazabilirsiniz.)* Ekranda `Python 3.12.x` çıktısını görüyorsanız her şey hazır demektir.
+
+**Eski veya Hatalı Sürümü Silmek İsterseniz (Opsiyonel):**
+Eğer uyumsuz veya eski bir sürüm (örn. 3.10) kuruluysa ve projenin temiz çalışması için silmek isterseniz:
+- **macOS için:** Terminal'e `brew uninstall python@3.10` (veya sileceğiniz sürüm) yazarak temizleyebilirsiniz.
+- **Windows için:** Başlat menüsünden `Program Ekle veya Kaldır` (Add or Remove Programs) bölümüne girip listeden "Python" aratın ve eski sürümleri silin.
+
 ---
 
 ## Adım 1: Projeyi Bilgisayara İndirme (Clone) veya Güncelleme
