@@ -4,6 +4,25 @@ Bu rehber, projedeki tüm modüllerin (Görüntü Robustness ve Akıllı Veri Ar
 
 ---
 
+## Adım 0: İdeal Python Sürümünün Kurulumu (Önkoşul)
+Bu projenin (TensorFlow, PyTorch, YOLO, PySide6 vb.) en yüksek performansta ve sıfır çakışmayla çalışacağı **en ideal (altın standart) sürüm Python 3.11'dir.** (Python 3.10 ve 3.12 sürümleri de desteklenmektedir). 
+
+Eğer bilgisayarınızda Python 3.11 kurulu değilse, işletim sisteminize göre aşağıdaki adımları uygulayarak kurabilirsiniz:
+
+**macOS İçin:**
+Terminali açıp Homebrew ile en temiz şekilde kurabilirsiniz:
+```bash
+brew install python@3.11
+```
+*(Eğer Homebrew yoksa [Python'un resmi sitesinden macOS yükleyicisini indirip](https://www.python.org/downloads/release/python-3119/) kurabilirsiniz.)*
+
+**Windows İçin:**
+[Python Resmi İndirme Sayfası (3.11.9)](https://www.python.org/downloads/release/python-3119/) linkine tıklayıp **"Windows installer (64-bit)"** dosyasını indirin. 
+> [!IMPORTANT]
+> Kurulumu başlatırken karşınıza çıkan ilk ekranda **"Add python.exe to PATH"** kutucuğunu kesinlikle işaretleyin!
+
+---
+
 ## Adım 1: Projeyi Bilgisayara İndirme (Clone) veya Güncelleme
 Terminalinizi (veya PowerShell/Command Prompt) açın ve projeyi ilk defa indiriyorsanız bilgisayarınıza çekin:
 
@@ -28,17 +47,17 @@ git lfs pull
 *(Not: Eğer Git LFS sisteminizde kurulu değilse, macOS için `brew install git-lfs`, Windows için Git kurucusundan LFS seçeneğini aktif ederek kurabilirsiniz.)*
 
 ## Adım 3: Tek Ortam (Unified Environment) Oluşturma
-Her iki arayüzün sorunsuz çalışması için proje kök dizininde tek bir sanal ortam oluşturuyoruz. (Eğer eski `.venv311` veya `otonom_env` klasörleriniz varsa silebilirsiniz).
+Her iki arayüzün sorunsuz çalışması için proje kök dizininde Python 3.11 tabanlı tek bir sanal ortam oluşturuyoruz. (Eğer eski `.venv311` veya `otonom_env` klasörleriniz varsa silebilirsiniz).
 
 **macOS/Linux için:**
 ```bash
-python3 -m venv env
+python3.11 -m venv env
 source env/bin/activate
 ```
 
 **Windows için:**
 ```powershell
-python -m venv env
+py -3.11 -m venv env
 .\env\Scripts\activate
 ```
 
