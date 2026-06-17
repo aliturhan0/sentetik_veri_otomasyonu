@@ -10,10 +10,15 @@ Bu projenin listelenen paketlerle %100 uyumlu ve en yüksek performansta (sıfı
 Eğer bilgisayarınızda Python 3.12.7 kurulu değilse, işletim sisteminize göre aşağıdaki adımları uygulayarak kurabilirsiniz:
 
 **macOS İçin:**
-En garanti ve risksiz yöntem Python'un resmi sitesinden kurmaktır.
-[Python Resmi İndirme Sayfası (3.12.7)](https://www.python.org/downloads/release/python-3127/) linkine tıklayıp en alttaki **"macOS 64-bit universal2 installer"** dosyasına tıklayarak indirin ve normal bir program kurar gibi (İleri > İleri diyerek) kurun.
+Öncelikle eğer bilgisayarınızda **Homebrew** yüklü değilse, Terminal'i açıp şu komutu yapıştırarak Homebrew'u kurun (Bu işlem macOS için program kurmayı çok kolaylaştırır):
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
 
-*(Eğer illa Terminal'den kurmak isterseniz alternatif olarak `brew install python@3.12` komutunu da kullanabilirsiniz ama resmi yükleyici her zaman en risksiz olanıdır).*
+Homebrew kurulduktan sonra (veya zaten yüklüyse), Python 3.12'yi en temiz şekilde kurmak için Terminal'e şunu yazın:
+```bash
+brew install python@3.12
+```
 
 **Windows İçin:**
 [Python Resmi İndirme Sayfası (3.12.7)](https://www.python.org/downloads/release/python-3127/) linkine tıklayıp **"Windows installer (64-bit)"** dosyasını indirin. 
