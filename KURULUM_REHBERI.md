@@ -101,3 +101,90 @@ Karşınıza çıkan arayüzden:
 - **"Veri Artırımı Modelini Aç"** butonu ile tablo/yörünge sentetik veri üretim hattına giriş yapabilirsiniz.
 
 İyi çalışmalar dileriz!
+
+---
+
+## 📥 Ek: Python 3.12 Manuel Kurulum Rehberi (Homebrew Olmadan)
+
+Eğer bilgisayarınızda Homebrew kurulu değilse veya Terminal komutlarıyla uğraşmak istemiyorsanız, Python 3.12'yi doğrudan Python'un resmi web sitesinden indirip normal bir program kurar gibi yükleyebilirsiniz.
+
+---
+
+### 🍎 macOS İçin Adım Adım Kurulum
+
+**1. İndirme sayfasını açın:**
+Tarayıcınızda şu linke tıklayın:
+👉 [https://www.python.org/downloads/release/python-3127/](https://www.python.org/downloads/release/python-3127/)
+
+**2. Doğru dosyayı bulun:**
+Sayfanın en altına kadar kaydırın. **"Files"** başlığı altındaki tablodan şu dosyayı bulup tıklayın:
+```
+macOS 64-bit universal2 installer
+```
+*(Dosya adı: `python-3.12.7-macos11.pkg`, boyutu yaklaşık ~45 MB)*
+
+**3. İndirilen .pkg dosyasını açın:**
+İndirilenler (Downloads) klasörünüze gidin ve `python-3.12.7-macos11.pkg` dosyasına çift tıklayın.
+
+**4. Kurulum sihirbazını takip edin:**
+Açılan pencerede sırasıyla:
+- **"Devam Et (Continue)"** → tıklayın
+- **"Devam Et (Continue)"** → tıklayın (lisans sözleşmesi)
+- **"Kabul Et (Agree)"** → tıklayın
+- **"Yükle (Install)"** → tıklayın
+- Mac şifrenizi girin → **"Yazılım Yükle (Install Software)"** → tıklayın
+- **"Kapat (Close)"** → tıklayın
+
+**5. Kurulumu doğrulayın:**
+Terminal'i açın (Spotlight'a "Terminal" yazarak bulabilirsiniz) ve şu komutu yazın:
+```bash
+python3.12 --version
+```
+Ekranda `Python 3.12.7` yazısını görüyorsanız kurulum başarılıdır. ✅
+
+> [!NOTE]
+> macOS'te `python3 --version` yazdığınızda eski bir sürüm (örn. 3.9 veya 3.11) görünebilir. Bu normaldir. Mac'ler eski sürümleri silmez, yeni sürümü yanına ekler. Bizim projemiz `python3.12` komutunu kullandığı için eski sürümlerden etkilenmez.
+
+---
+
+### 🪟 Windows İçin Adım Adım Kurulum
+
+**1. İndirme sayfasını açın:**
+Tarayıcınızda şu linke tıklayın:
+👉 [https://www.python.org/downloads/release/python-3127/](https://www.python.org/downloads/release/python-3127/)
+
+**2. Doğru dosyayı bulun:**
+Sayfanın en altına kadar kaydırın. **"Files"** başlığı altındaki tablodan şu dosyayı bulup tıklayın:
+```
+Windows installer (64-bit)
+```
+*(Dosya adı: `python-3.12.7-amd64.exe`, boyutu yaklaşık ~25 MB)*
+
+**3. İndirilen .exe dosyasını açın:**
+İndirilenler (Downloads) klasörünüze gidin ve `python-3.12.7-amd64.exe` dosyasına çift tıklayın.
+
+**4. Kurulum ekranında dikkatli olun:**
+
+> [!IMPORTANT]
+> Kurulumun **ilk ekranında** en altta iki kutucuk vardır. **"Add python.exe to PATH"** kutucuğunu kesinlikle işaretleyin! Bu işaretlenmezse Terminal'den Python komutları çalışmaz.
+
+Kutucuğu işaretledikten sonra:
+- **"Install Now"** → tıklayın
+- Kurulumun bitmesini bekleyin (birkaç dakika sürebilir)
+- **"Close"** → tıklayın
+
+**5. Kurulumu doğrulayın:**
+Başlat menüsünden **"PowerShell"** veya **"Komut İstemi (CMD)"** açın ve şu komutu yazın:
+```powershell
+python --version
+```
+veya
+```powershell
+py -3.12 --version
+```
+Ekranda `Python 3.12.7` yazısını görüyorsanız kurulum başarılıdır. ✅
+
+---
+
+> [!TIP]
+> Python kurulumu tamamlandıktan sonra bu rehberin **Adım 1**'e geri dönüp projeyi kurmaya devam edebilirsiniz.
