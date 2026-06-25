@@ -599,62 +599,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Trajectories
-        const tData = d.fidelity && d.fidelity.trajectories ? d.fidelity.trajectories : null;
-        if (tData && tData.orig.length > 0 && tData.gen.length > 0) {
-            $('trajectory-card').classList.remove('hidden');
-            
-            if (window.trajCharts) {
-                if (window.trajCharts.orig) window.trajCharts.orig.destroy();
-                if (window.trajCharts.gen) window.trajCharts.gen.destroy();
-            } else {
-                window.trajCharts = {};
-            }
-
-            const createTrajChart = (canvasId, dataList, color) => {
-                const ctx = $(canvasId).getContext('2d');
-                const datasets = dataList.map((traj, idx) => ({
-                    label: `Yörünge ${idx+1}`,
-                    data: traj,
-                    borderColor: color,
-                    borderWidth: 1,
-                    fill: false,
-                    showLine: true,
-                    pointRadius: 0,
-                    tension: 0.1
-                }));
-
-                return new Chart(ctx, {
-                    type: 'scatter',
-                    data: { datasets: datasets },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: {
-                            x: {
-                                type: 'linear',
-                                position: 'bottom',
-                                title: { display: true, text: 'X (m)', color: '#a0aec0' },
-                                ticks: { color: '#a0aec0' },
-                                grid: { color: 'rgba(255,255,255,0.05)' }
-                            },
-                            y: {
-                                type: 'linear',
-                                title: { display: true, text: 'Y (m)', color: '#a0aec0' },
-                                ticks: { color: '#a0aec0' },
-                                grid: { color: 'rgba(255,255,255,0.05)' }
-                            }
-                        },
-                        animation: false
-                    }
-                });
-            };
-
-            window.trajCharts.orig = createTrajChart('traj-orig-chart', tData.orig, 'rgba(16, 185, 129, 0.5)'); // Greenish
-            window.trajCharts.gen = createTrajChart('traj-gen-chart', tData.gen, 'rgba(217, 119, 6, 0.5)');   // Orangey
-        }
-
         if(switchPanel) {
             document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
             document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
