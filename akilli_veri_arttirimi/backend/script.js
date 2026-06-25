@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const API = 'http://127.0.0.1:8000';
     const $ = id => document.getElementById(id);
     let currentFile = null, f1Chart = null, distilledFile = null;
+    let histCharts = {};
     
     // Set absolute download links
     $('dl-distilled').href = API + '/api/download_distilled';
@@ -541,6 +542,60 @@ document.addEventListener('DOMContentLoaded', () => {
             log('F1: '+d.seed_f1.toFixed(4)+' → '+d.augmented_f1.toFixed(4)+' ('+(d.improvement>0?'+':'')+d.improvement.toFixed(1)+'%)','ok');
         } else if(d.quality_report) {
             log('Kalite skoru: '+d.quality_report.overall_score.toFixed(1)+'/100 ('+d.quality_report.grade+')','ok');
+        }
+
+        // Histograms
+        if (d.histograms) {
+            $('histogram-card').classList.remove('hidden');
+            const targetCols = ['x(10)', 'y(10)', 'speed(10)', 'vx(10)'];
+            const canvasIds = ['hist-x', 'hist-y', 'hist-speed', 'hist-vx'];
+            
+            targetCols.forEach((col, idx) => {
+                if (d.histograms[col]) {
+                    const ctx = $(canvasIds[idx]).getContext('2d');
+                    if (histCharts[col]) histCharts[col].destroy();
+                    
+                    histCharts[col] = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: d.histograms[col].bins.map(b => b.toFixed(2)),
+                            datasets: [
+                                {
+                                    label: 'Orijinal Waymo',
+                                    data: d.histograms[col].orig_hist,
+                                    backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                                    borderColor: 'rgba(16, 185, 129, 1)',
+                                    borderWidth: 1,
+                                    fill: true,
+                                    stepped: 'middle'
+                                },
+                                {
+                                    label: 'Yeni Sentetik Üretim',
+                                    data: d.histograms[col].gen_hist,
+                                    backgroundColor: 'rgba(217, 119, 6, 0.8)',
+                                    borderColor: 'rgba(217, 119, 6, 1)',
+                                    borderWidth: 1,
+                                    fill: true,
+                                    stepped: 'middle'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: true, position: 'top', labels: { color: '#a0aec0', boxWidth: 12, font: { size: 10 } } },
+                                title: { display: true, text: col === 'x(10)' ? 'X Koordinatı (Adım 10)' : col === 'y(10)' ? 'Y Koordinatı (Adım 10)' : col === 'speed(10)' ? 'Hız (Adım 10)' : 'X Yönlü Hız (Adım 10)', color: '#e2e8f0', font: { size: 12, weight: 'normal' } }
+                            },
+                            scales: {
+                                x: { ticks: { color: '#a0aec0', maxTicksLimit: 6 }, grid: { display: false } },
+                                y: { ticks: { color: '#a0aec0' }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+                            },
+                            interaction: { mode: 'index', intersect: false }
+                        }
+                    });
+                }
+            });
         }
 
         if(switchPanel) {

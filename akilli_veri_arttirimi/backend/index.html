@@ -157,6 +157,17 @@
                         <div class="glass-card"><div class="card-title" id="comparison-title"><i class="fa-solid fa-chart-column"></i> Performans Karşılaştırması</div><div class="chart-box"><canvas id="f1Chart"></canvas></div></div>
                         <div class="glass-card"><div class="card-title"><i class="fa-solid fa-list-check"></i> Analiz Detayları</div><div class="detail-list" id="detail-list"><p style="color:var(--muted)">Henüz analiz yapılmadı.</p></div></div>
                     </div>
+                    
+                    <div class="glass-card hidden" id="histogram-card" style="margin-top: 15px;">
+                        <div class="card-title"><i class="fa-solid fa-chart-area"></i> Waymo Verisi: Orijinal vs Yeni Sentetik Üretim Dağılımı</div>
+                        <div class="histogram-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; height: 350px;">
+                            <div style="position: relative; height: 100%;"><canvas id="hist-x"></canvas></div>
+                            <div style="position: relative; height: 100%;"><canvas id="hist-y"></canvas></div>
+                            <div style="position: relative; height: 100%;"><canvas id="hist-speed"></canvas></div>
+                            <div style="position: relative; height: 100%;"><canvas id="hist-vx"></canvas></div>
+                        </div>
+                    </div>
+
                     <div class="glass-card download-card hidden" id="dl-card">
                         <a href="/api/download_generated" class="btn-download" download="sentetik_veri.csv" target="_blank"><i class="fa-solid fa-download"></i> Sentetik Veriyi İndir (CSV)</a>
                     </div>
