@@ -2038,7 +2038,7 @@ def _compute_fidelity_report(df_orig, df_gen, numeric_cols, label_col=None, vali
         
         # NumPy tiplerini native listelere çevir
         histograms[col] = {
-            "bins": [(bins[i] + bins[i+1])/2 for i in range(len(bins)-1)],
+            "bins": [float((bins[i] + bins[i+1])/2) for i in range(len(bins)-1)],
             "orig_hist": [float(h) if not np.isnan(h) else 0.0 for h in orig_hist],
             "gen_hist": [float(h) if not np.isnan(h) else 0.0 for h in gen_hist]
         }
