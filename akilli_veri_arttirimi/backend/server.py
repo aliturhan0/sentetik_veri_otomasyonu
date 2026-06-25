@@ -2043,6 +2043,24 @@ def _compute_fidelity_report(df_orig, df_gen, numeric_cols, label_col=None, vali
             "gen_hist": [float(h) if not np.isnan(h) else 0.0 for h in gen_hist]
         }
 
+    # 5. Yörünge Verileri (Waymo için özel: x(1)..x(20), y(1)..y(20))
+    trajectories = {"orig": [], "gen": []}
+    if all(f'x({i})' in common_cols and f'y({i})' in common_cols for i in range(1, 21)):
+        x_idxs = [common_cols.index(f'x({i})') for i in range(1, 21)]
+        y_idxs = [common_cols.index(f'y({i})') for i in range(1, 21)]
+        
+        # Orijinalden ilk 50
+        for i in range(min(50, len(X))):
+            row = X[i]
+            traj = [{"x": float(row[x_idxs[j]]), "y": float(row[y_idxs[j]])} for j in range(20)]
+            trajectories["orig"].append(traj)
+            
+        # Sentetikten ilk 50
+        for i in range(min(50, len(Xg))):
+            row = Xg[i]
+            traj = [{"x": float(row[x_idxs[j]]), "y": float(row[y_idxs[j]])} for j in range(20)]
+            trajectories["gen"].append(traj)
+
     return {
         "applicable": True,
         "cosine_similarity": round(max(0.0, min(1.0, cosine_val)), 4),
@@ -2052,7 +2070,8 @@ def _compute_fidelity_report(df_orig, df_gen, numeric_cols, label_col=None, vali
         "column_details": col_details,
         "common_numeric_cols": len(common_cols),
         "compared_rows": {"seed": int(len(orig_frame)), "synthetic": int(len(gen_frame))},
-        "histograms": histograms
+        "histograms": histograms,
+        "trajectories": trajectories
     }
 
 def _quality_context(df_orig, df_gen, method, is_waymo, label_col, numeric_cols):
