@@ -188,3 +188,92 @@ Ekranda `Python 3.12.7` yazısını görüyorsanız kurulum başarılıdır. ✅
 
 > [!TIP]
 > Python kurulumu tamamlandıktan sonra bu rehberin **Adım 1**'e geri dönüp projeyi kurmaya devam edebilirsiniz.
+
+---
+
+## 🔧 Sorun Giderme: Akıllı Veri Artırımı Arayüzü Hataları
+
+Eğer tüm paketler hatasız kurulduğu halde **Akıllı Veri Artırımı** arayüzünde aşağıdaki sorunlardan biri yaşanıyorsa, bu bölümdeki adımları uygulayın:
+
+- Seed verisi **0** gösteriyor
+- RCGAN modeli ismi görünmüyor (sadece "Bağlandı" yazıyor)
+- CSV yükleyince **"There was an error parsing the body"** hatası alınıyor
+
+---
+
+### Düzeltme 1: Seed ve Model Dosyası Algılanmıyor (Seed 0 Sorunu)
+
+**Sebep:** macOS'un iCloud dosya sistemi bazen gerçek dosyaları "placeholder" olarak işaretler. Kod bu dosyaları atlayarak "yok" sayar.
+
+**Dosya:** `akilli_veri_arttirimi/backend/server.py`
+
+**Satır 196-215** arasındaki `get_local_asset_path` fonksiyonunu bulun ve **tamamını** şu şekilde değiştirin:
+
+```python
+def get_local_asset_path(path):
+    """Placeholder varlıklarda aynı yapıya sahip yerel çalışma kopyasını kullan."""
+    candidates = [path]
+    try:
+        relative = os.path.relpath(path, PROJECT_DIR)
+        if not relative.startswith(".."):
+            candidates.append(os.path.join(LOCAL_MIRROR_PROJECT_DIR, relative))
+    except ValueError:
+        pass
+
+    for candidate in candidates:
+        try:
+            if not os.path.isfile(candidate):
+                continue
+            size = os.path.getsize(candidate)
+            if size <= 0 or is_git_lfs_pointer(candidate):
+                continue
+            # Dosya 1 MB'dan büyükse gerçek veridir, iCloud kontrolüne gerek yok
+            if size > 1024 * 1024:
+                return candidate
+            if is_dataless_file(candidate):
+                continue
+            return candidate
+        except OSError:
+            continue
+    return None
+```
+
+**Ne değişti:** Dosya boyutu 1 MB'dan büyükse (ki seed dosyası ~700 MB, model dosyası ~360 MB) iCloud kontrolünü atlayarak dosyayı doğrudan kabul eder. Böylece macOS'un yanlış işaretlemesi sorunu ortadan kalkar.
+
+---
+
+### Düzeltme 2: CSV Yüklerken "Error Parsing the Body" Hatası
+
+**Sebep:** Masaüstü uygulaması (pywebview) HTML'i doğrudan bellekte yüklediği için tarayıcının origin değeri `null` olur. Bazı macOS sürümlerinde WebKit bu origin ile dosya yükleme isteğini farklı formatlayabilir.
+
+**Dosya:** `akilli_veri_arttirimi/main.py`
+
+**Satır 146-155** arasındaki `webview.create_window` bloğunu bulun ve şu şekilde değiştirin:
+
+```python
+    window = webview.create_window(
+        "Sentetik Veri Üretim Hattı",
+        url=f"http://{HOST}:{PORT}",
+        js_api=DesktopApi(),
+        width=1440,
+        height=920,
+        min_size=(1100, 720),
+    )
+    window.events.closed += app.stop_backend
+    webview.start(gui="cocoa", debug=False)
+```
+
+**Ne değişti:** `html=load_desktop_html()` yerine `url=f"http://{HOST}:{PORT}"` kullanarak pencereyi doğrudan backend sunucusuna bağlarız. Bu sayede origin `null` yerine `http://127.0.0.1:8000` olur ve dosya yükleme istekleri sorunsuz çalışır.
+
+> [!IMPORTANT]
+> Bu değişikliği yaptığınızda `load_desktop_html` fonksiyonu artık kullanılmaz; silmenize gerek yok, sadece çağrılmayacaktır.
+
+---
+
+### Düzeltmeleri Uyguladıktan Sonra
+
+Dosyaları kaydedip projeyi tekrar başlatın:
+```bash
+python main_launcher.py
+```
+Akıllı Veri Artırımı butonuna tıkladığınızda seed verisi satır sayısını göstermeli, model ismi görünmeli ve CSV yükleme sorunsuz çalışmalıdır.
