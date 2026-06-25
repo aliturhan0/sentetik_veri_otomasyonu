@@ -545,24 +545,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Histograms
-        if (d.histograms) {
+        const hData = d.fidelity && d.fidelity.histograms ? d.fidelity.histograms : (d.histograms ? d.histograms : null);
+        if (hData) {
             $('histogram-card').classList.remove('hidden');
             const targetCols = ['x(10)', 'y(10)', 'speed(10)', 'vx(10)'];
             const canvasIds = ['hist-x', 'hist-y', 'hist-speed', 'hist-vx'];
             
             targetCols.forEach((col, idx) => {
-                if (d.histograms[col]) {
+                if (hData[col]) {
                     const ctx = $(canvasIds[idx]).getContext('2d');
                     if (histCharts[col]) histCharts[col].destroy();
                     
                     histCharts[col] = new Chart(ctx, {
                         type: 'line',
                         data: {
-                            labels: d.histograms[col].bins.map(b => b.toFixed(2)),
+                            labels: hData[col].bins.map(b => b.toFixed(2)),
                             datasets: [
                                 {
                                     label: 'Orijinal Waymo',
-                                    data: d.histograms[col].orig_hist,
+                                    data: hData[col].orig_hist,
                                     backgroundColor: 'rgba(16, 185, 129, 0.8)',
                                     borderColor: 'rgba(16, 185, 129, 1)',
                                     borderWidth: 1,
@@ -571,7 +572,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 },
                                 {
                                     label: 'Yeni Sentetik Üretim',
-                                    data: d.histograms[col].gen_hist,
+                                    data: hData[col].gen_hist,
                                     backgroundColor: 'rgba(217, 119, 6, 0.8)',
                                     borderColor: 'rgba(217, 119, 6, 1)',
                                     borderWidth: 1,
