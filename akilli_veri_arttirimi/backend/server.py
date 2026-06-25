@@ -2018,6 +2018,31 @@ def _compute_fidelity_report(df_orig, df_gen, numeric_cols, label_col=None, vali
             "standardized_mean_diff": round(mean_diff_abs / pooled_std, 4)
         })
 
+    # 4. Histogram Verileri (Waymo için özel: x(10), y(10), speed(10), vx(10))
+    histograms = {}
+    target_cols = [c for c in ['x(10)', 'y(10)', 'speed(10)', 'vx(10)'] if c in common_cols]
+    for col in target_cols:
+        col_idx = common_cols.index(col)
+        orig_data = X[:, col_idx]
+        gen_data = Xg[:, col_idx]
+        
+        # Sınırları belirle
+        min_val = min(np.min(orig_data), np.min(gen_data))
+        max_val = max(np.max(orig_data), np.max(gen_data))
+        bins = np.linspace(min_val, max_val, 50)
+        
+        # Orijinal histogram (yoğunluk)
+        orig_hist, _ = np.histogram(orig_data, bins=bins, density=True)
+        # Sentetik histogram (yoğunluk)
+        gen_hist, _ = np.histogram(gen_data, bins=bins, density=True)
+        
+        # NumPy tiplerini native listelere çevir
+        histograms[col] = {
+            "bins": [(bins[i] + bins[i+1])/2 for i in range(len(bins)-1)],
+            "orig_hist": [float(h) if not np.isnan(h) else 0.0 for h in orig_hist],
+            "gen_hist": [float(h) if not np.isnan(h) else 0.0 for h in gen_hist]
+        }
+
     return {
         "applicable": True,
         "cosine_similarity": round(max(0.0, min(1.0, cosine_val)), 4),
@@ -2026,7 +2051,8 @@ def _compute_fidelity_report(df_orig, df_gen, numeric_cols, label_col=None, vali
         "column_correlation": round(max(0.0, min(1.0, (mean_corr + std_corr) / 2.0)), 4),
         "column_details": col_details,
         "common_numeric_cols": len(common_cols),
-        "compared_rows": {"seed": int(len(orig_frame)), "synthetic": int(len(gen_frame))}
+        "compared_rows": {"seed": int(len(orig_frame)), "synthetic": int(len(gen_frame))},
+        "histograms": histograms
     }
 
 def _quality_context(df_orig, df_gen, method, is_waymo, label_col, numeric_cols):
@@ -2333,38 +2359,12 @@ def evaluate(df_orig, df_gen, label_col, numeric_cols):
                     "standardized_mean_diff": round(mean_diff_abs / pooled_std, 4)
                 })
             
-            # 4. Histogram Verileri (Waymo için özel: x(10), y(10), speed(10), vx(10))
-            histograms = {}
-            target_cols = [c for c in ['x(10)', 'y(10)', 'speed(10)', 'vx(10)'] if c in gc]
-            for col in target_cols:
-                col_idx = gc.index(col)
-                orig_data = X[:, col_idx]
-                gen_data = Xg[:, col_idx]
-                
-                # Sınırları belirle
-                min_val = min(np.min(orig_data), np.min(gen_data))
-                max_val = max(np.max(orig_data), np.max(gen_data))
-                bins = np.linspace(min_val, max_val, 50)
-                
-                # Orijinal histogram (yoğunluk)
-                orig_hist, _ = np.histogram(orig_data, bins=bins, density=True)
-                # Sentetik histogram (yoğunluk)
-                gen_hist, _ = np.histogram(gen_data, bins=bins, density=True)
-                
-                # NumPy tiplerini native listelere çevir
-                histograms[col] = {
-                    "bins": [(bins[i] + bins[i+1])/2 for i in range(len(bins)-1)],
-                    "orig_hist": [float(h) if not np.isnan(h) else 0.0 for h in orig_hist],
-                    "gen_hist": [float(h) if not np.isnan(h) else 0.0 for h in gen_hist]
-                }
-            
             fidelity = {
                 "cosine_similarity": round(cosine_val, 4),
                 "mean_correlation": round(mean_corr, 4) if not np.isnan(mean_corr) else 0,
                 "std_correlation": round(std_corr, 4) if not np.isnan(std_corr) else 0,
                 "column_correlation": round((mean_corr + std_corr) / 2, 4) if not (np.isnan(mean_corr) or np.isnan(std_corr)) else 0,
-                "column_details": col_details,
-                "histograms": histograms
+                "column_details": col_details
             }
             
             # ══ AUGMENTED MODEL (Orijinal + Sentetik veriyle) ══
