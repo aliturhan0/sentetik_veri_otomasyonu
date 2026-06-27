@@ -482,10 +482,3 @@ Waymo Motion Dataset, Google'ın otonom araç projesi Waymo'dan elde edilen ger�
 
 ---
 **Geliştiriciler:** Ali Turhan & Özcan Yıldıral | Modern AI Araştırma Laboratuvarı Mimarisi
-
-pip uninstall -y opencv-python opencv-contrib-python opencv-python-headless
-pip install --no-cache-dir opencv-python==4.10.0.84 opencv-contrib-python==4.10.0.84
-
-pip uninstall -y pandas numpy
-pip install --no-cache-dir "numpy<2.0" "pandas>=2.1.1,<3"
-pip install --no-cache-dir --force-reinstall numpy pandas python-dateutil pytz tzdata
