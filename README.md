@@ -480,5 +480,7 @@ Waymo Motion Dataset, Google'ın otonom araç projesi Waymo'dan elde edilen ger�
 
 ## 📚 Kullanılan Açık Veri Seti: https://www.kaggle.com/datasets/mitanshuchakrawarty/nuscenes
 
+Video Linki: https://youtu.be/cxF_v1OFg64
+
 ---
 **Geliştiriciler:** Ali Turhan & Özcan Yıldıral | Modern AI Araştırma Laboratuvarı Mimarisi
